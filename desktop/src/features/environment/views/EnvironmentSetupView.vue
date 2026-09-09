@@ -45,9 +45,9 @@ function summaryKeydown(event: KeyboardEvent) {
 const exporting = ref(false);
 const exportError = ref('');
 const scanBlocked = computed(() => store.validationMode === 'smart' && !environment.wizardCanContinue());
-const exportDisabled = computed(() => store.hasErrors || scanBlocked.value || exporting.value || !store.plan.steps.length);
+const exportDisabled = computed(() => store.hasInstallationTargets || store.hasErrors || scanBlocked.value || exporting.value || !store.plan.steps.length);
 const labels = computed(() => ['开发场景', '选择工具', '检查方案', isDesktop() ? '安装' : '导出']);
-const nextDisabled = computed(() => installer.running || (store.step === 1 ? !store.templateId && !store.plan.selections.length : !store.plan.steps.length || (store.step === 3 && store.hasErrors)));
+const nextDisabled = computed(() => installer.running || (store.hasInstallationTargets && store.step >= 2 && (scanBlocked.value || (store.step === 3 && !installer.canStart))) || (store.step === 1 ? !store.templateId && !store.plan.selections.length : !store.plan.steps.length || (store.step === 3 && store.hasErrors)));
 onBeforeRouteLeave(() => !installer.running);
 onBeforeRouteUpdate(() => !installer.running);
 onMounted(() => installer.restore());
@@ -126,7 +126,8 @@ watch(() => route.query.tool, (value) => {
       <header class="page-heading setup-heading"><span class="page-kicker">04 / {{ isDesktop() ? '安装' : '导出' }}</span><h1>{{ isDesktop() ? '安装开发环境' : '导出安装脚本' }}</h1><p>{{ store.plan.script.shell === 'powershell' ? 'PowerShell' : 'Bash' }} · {{ store.plan.steps.length }} 个安装步骤</p></header>
       <div v-if="store.hasErrors" class="diagnostic-row is-error" role="alert"><AlertTriangle :size="18" /><span><strong>暂不能导出</strong>返回检查步骤处理不兼容或缺少安装方式的工具。</span></div>
       <InstallationPanel />
-      <details class="export-disclosure" :open="!isDesktop() || route.params.step === 'export'"><summary>导出安装脚本</summary><ScriptExport :plan="store.plan" :disabled="exportDisabled" :copied="copied" @copy="copyScript" @download="downloadScript" /></details>
+      <p v-if="store.hasInstallationTargets" class="diagnostic-row">此方案包含逐款磁盘配置，需要在桌面端执行，暂不支持导出脚本。</p>
+      <details v-else class="export-disclosure" :open="!isDesktop() || route.params.step === 'export'"><summary>导出安装脚本</summary><ScriptExport :plan="store.plan" :disabled="exportDisabled" :copied="copied" @copy="copyScript" @download="downloadScript" /></details>
     </section>
 
     <footer class="setup-actionbar">

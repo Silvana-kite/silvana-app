@@ -218,7 +218,27 @@ pub fn verification_path(spec: &Process) -> Option<String> {
 }
 
 pub fn capture(spec: &Process) -> Result<String, String> {
-    let mut child = command(spec)?
+    capture_command(command(spec)?)
+}
+
+/// Absolute executable paths are derived by the native resolver, never supplied by the renderer.
+pub fn capture_at(item: &Resolved, path: &Path) -> Result<String, String> {
+    let mut command = quiet_command(path);
+    configure(&mut command)?;
+    if item.tool.id == "vscode" {
+        command.env("ELECTRON_RUN_AS_NODE", "1");
+        command.arg(
+            path.parent()
+                .ok_or("无效的 VS Code 目录")?
+                .join("resources/app/out/cli.js"),
+        );
+    }
+    command.args(verify(item).args);
+    capture_command(command)
+}
+
+fn capture_command(mut command: Command) -> Result<String, String> {
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -311,6 +331,15 @@ pub fn install(item: &Resolved) -> Result<Process, String> {
         _ => return Err("执行器不支持该包管理器。".into()),
     };
     args.extend(recipe.arguments.clone().unwrap_or_default());
+    if let Some(directory) = super::locations::directory(item) {
+        if recipe.manager != "winget" {
+            return Err("该配方不支持指定安装目录。".into());
+        }
+        args.extend([
+            "--location".into(),
+            directory.to_string_lossy().into_owned(),
+        ]);
+    }
     Ok(Process {
         executable: if recipe.manager == "apt" {
             "pkexec".into()
@@ -391,6 +420,7 @@ mod tests {
                 }],
                 catalog_revision: embedded().revision,
                 fingerprint: String::new(),
+                installation_targets: Default::default(),
             };
             let process = install(&resolve(&request).unwrap()[0]).unwrap();
             assert_eq!(process.executable, executable);

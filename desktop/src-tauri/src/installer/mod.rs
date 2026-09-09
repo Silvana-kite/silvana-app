@@ -1,5 +1,6 @@
 mod catalog;
 mod downloads;
+mod locations;
 mod platforms;
 mod process;
 mod runner;
@@ -26,6 +27,10 @@ pub struct Step {
     executable_path: Option<String>,
     status: String,
     message: String,
+    #[serde(default)]
+    target_disk: Option<String>,
+    #[serde(default)]
+    install_directory: Option<String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Blocker {
@@ -160,6 +165,26 @@ async fn check_host_and_space(
         }
     }
     let disks = crate::device::scan_disks(app.clone(), true).await?;
+    if !request.installation_targets.is_empty() {
+        let temporary = disks
+            .iter()
+            .find(|disk| disk.temporary_target)
+            .and_then(|disk| locations::drive(&disk.id))
+            .ok_or("无法验证临时缓存所在磁盘。")?;
+        for (id, required) in locations::budgets(items, &temporary) {
+            let disk = disks
+                .iter()
+                .find(|disk| locations::drive(&disk.id).as_deref() == Some(&id))
+                .ok_or_else(|| format!("目标磁盘 {id} 已离线，请重新扫描并选择。"))?;
+            if disk.available_bytes < required {
+                return Err(format!(
+                    "磁盘 {id} 空间不足，需要预留 {:.1} GiB（含软件、缓存及预留空间）。",
+                    required as f64 / 1024_f64.powi(3)
+                ));
+            }
+        }
+        return Ok(());
+    }
     let mb: u64 = items.iter().map(|i| i.tool.disk_mb).sum();
     let required = ((mb * 1024 * 1024) as f64 * 1.2).ceil() as u64 + 2 * 1024_u64.pow(3);
     let targets: Vec<_> = disks
@@ -177,7 +202,38 @@ fn inspect(items: &[Resolved]) -> (Vec<Step>, Vec<Blocker>) {
     let mut blockers = Vec::new();
     for item in items {
         let verify = process::verify(item);
-        let output = process::capture(&verify).ok();
+        let existing_path = if item.target_disk.is_some() {
+            locations::actual_path(item)
+        } else {
+            process::verification_path(&verify)
+        };
+        let targeted = locations::executable(item).filter(|path| path.is_file());
+        let executable_path = existing_path.clone().or_else(|| {
+            targeted
+                .as_ref()
+                .map(|path| path.to_string_lossy().into_owned())
+        });
+        let standard_output = process::capture(&verify).ok();
+        let unresolved_launcher = standard_output.is_some() && existing_path.is_none();
+        let output = standard_output.or_else(|| {
+            targeted
+                .as_ref()
+                .and_then(|path| process::capture_at(item, path).ok())
+        });
+        if item.target_disk.is_some() {
+            if unresolved_launcher {
+                blockers.push(Blocker {
+                    message: format!(
+                        "无法确认 {} 启动代理背后的真实位置。请检查现有安装。",
+                        item.tool.name
+                    ),
+                    url: None,
+                });
+            }
+            if let Err(message) = locations::preflight(item, executable_path.as_deref()) {
+                blockers.push(Blocker { message, url: None });
+            }
+        }
         let version = output
             .as_deref()
             .and_then(catalog::parse_version)
@@ -198,7 +254,6 @@ fn inspect(items: &[Resolved]) -> (Vec<Step>, Vec<Blocker>) {
             && version
                 .as_ref()
                 .is_some_and(|v| catalog::satisfies(v, &item.version.accepted_range));
-        let executable_path = process::verification_path(&verify);
         steps.push(Step {
             tool_id: item.tool.id.clone(),
             name: item.tool.name.clone(),
@@ -209,6 +264,9 @@ fn inspect(items: &[Resolved]) -> (Vec<Step>, Vec<Blocker>) {
             },
             installed_version: version,
             executable_path,
+            target_disk: item.target_disk.clone(),
+            install_directory: locations::directory(item)
+                .map(|path| path.to_string_lossy().into_owned()),
             status: if satisfied { "skipped" } else { "pending" }.into(),
             message: if satisfied {
                 "已有版本符合要求"
@@ -408,6 +466,9 @@ async fn start(
 struct NativeBackend;
 impl runner::Backend for NativeBackend {
     fn install(&mut self, item: &Resolved, log: &mut dyn FnMut(String)) -> Result<(), String> {
+        if item.target_disk.is_some() {
+            locations::preflight(item, locations::actual_path(item).as_deref())?;
+        }
         if item.recipe.is_none() {
             return Ok(());
         }
@@ -423,11 +484,27 @@ impl runner::Backend for NativeBackend {
     }
     fn verify(&mut self, item: &Resolved) -> Result<(String, Option<String>), String> {
         let verify = process::verify(item);
-        let output = process::capture(&verify)?;
+        let targeted = locations::executable(item).filter(|path| path.is_file());
+        let (output, path) = if let Some(path) = targeted {
+            (
+                process::capture_at(item, &path)?,
+                Some(path.to_string_lossy().into_owned()),
+            )
+        } else {
+            (
+                process::capture(&verify)?,
+                if item.target_disk.is_some() {
+                    locations::actual_path(item)
+                } else {
+                    process::verification_path(&verify)
+                },
+            )
+        };
+        locations::verify_path(item, path.as_deref())?;
         let version = catalog::parse_version(&output)
             .ok_or("无法读取安装后的版本")?
             .to_string();
-        Ok((version, process::verification_path(&verify)))
+        Ok((version, path))
     }
 }
 

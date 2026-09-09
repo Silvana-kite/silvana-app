@@ -3,11 +3,13 @@ import { createPinia, setActivePinia } from 'pinia';
 import { invoke } from '@tauri-apps/api/core';
 import { useInstallerStore, type InstallationSession } from './installer';
 import { useWizardStore } from './wizard';
+import { useEnvironmentStore } from './environment';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), Channel: class { onmessage?: (value: unknown) => void; } }));
 describe('installation session boundary', () => {
   beforeEach(() => { setActivePinia(createPinia()); localStorage.clear(); vi.mocked(invoke).mockReset(); Object.assign(window, { __TAURI_INTERNALS__: {} }); });
   function prepared(): InstallationSession {
+    useEnvironmentStore().consent = true;
     const wizard = useWizardStore();
     return { id: 'native-session', status: 'prepared', steps: [{ toolId: 'git', name: 'Git', version: 'stable', installedVersion: null, executablePath: null, status: 'pending', message: '' }], blockers: [], logs: [], fingerprint: JSON.stringify([wizard.platform, wizard.architecture, wizard.selected, wizard.catalog.revision]) };
   }
@@ -53,5 +55,25 @@ describe('installation session boundary', () => {
     await store.start(true);
     expect(invoke).toHaveBeenCalledWith('retry_install', expect.anything());
     expect(store.session.status).toBe('failed'); expect(store.error).toContain('Permission denied'); expect(store.busy).toBe(false);
+  });
+  it('sends only resolved tool disk choices and invalidates a prepared session after changing disks', async () => {
+    const wizard = useWizardStore(); wizard.platform = 'windows'; wizard.selected = { git: 'git-stable' };
+    wizard.installationTargets = { git: 'D:\\', vscode: 'E:\\' };
+    vi.spyOn(useEnvironmentStore(), 'wizardCanContinue').mockReturnValue(true);
+    vi.mocked(invoke).mockImplementation(async (_command, args) => ({ ...prepared(), fingerprint: (args as any).request.fingerprint }));
+    const store = useInstallerStore(); await store.prepare(true);
+    expect(invoke).toHaveBeenCalledWith('prepare_install', expect.objectContaining({ request: expect.objectContaining({ installationTargets: { git: 'D:\\' } }) }));
+    expect(store.canStart).toBe(true);
+    wizard.installationTargets.git = 'E:\\';
+    expect(store.canStart).toBe(false);
+    vi.mocked(invoke).mockClear(); await store.start(); expect(invoke).not.toHaveBeenCalled();
+  });
+  it('does not start or retry a prepared session after scan consent is revoked', async () => {
+    const store = useInstallerStore(); store.session = prepared();
+    useWizardStore().diskScanConsent = false;
+    expect(store.canStart).toBe(false);
+    await store.start(); await store.start(true);
+    expect(invoke).not.toHaveBeenCalled();
+    expect(store.error).toContain('授权已关闭');
   });
 });

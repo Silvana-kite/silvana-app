@@ -15,11 +15,13 @@ pub struct DeviceInfo {
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DiskInfo {
-    id: String,
+    pub(crate) id: String,
     label: String,
     total_bytes: u64,
     pub(crate) available_bytes: u64,
     pub(crate) installation_target: bool,
+    system_target: bool,
+    pub(crate) temporary_target: bool,
 }
 
 #[cfg(any(test, not(windows)))]
@@ -138,9 +140,26 @@ pub fn inspect_disks(
             total_bytes: disk.total_space(),
             available_bytes: disk.available_space(),
             installation_target: false,
+            system_target: false,
+            temporary_target: false,
         });
     }
-    classify_disks(result, &system_path, &user_path)
+    let mut result = classify_disks(result, &system_path, &user_path)?;
+    if cfg!(windows) {
+        let temporary = std::fs::canonicalize(std::env::temp_dir())
+            .map_err(|_| "无法定位临时文件所在磁盘。")?;
+        let temporary = temporary
+            .to_string_lossy()
+            .trim_start_matches("\\\\?\\")
+            .to_owned();
+        let disk = result
+            .iter_mut()
+            .filter(|disk| mount_contains(Path::new(&temporary), Path::new(&disk.id)))
+            .max_by_key(|disk| disk.id.len())
+            .ok_or("无法定位临时文件所在磁盘。")?;
+        disk.temporary_target = true;
+    }
+    Ok(result)
 }
 
 fn classify_disks(
@@ -164,6 +183,9 @@ fn classify_disks(
             .max_by_key(|disk| Path::new(&disk.id).components().count())
             .ok_or("无法定位系统或用户目录所在磁盘。")?;
         disk.installation_target = true;
+        if path == system_path {
+            disk.system_target = true;
+        }
     }
     Ok(disks)
 }
@@ -254,6 +276,8 @@ mod tests {
             total_bytes: 100,
             available_bytes: 1,
             installation_target: false,
+            system_target: false,
+            temporary_target: false,
         });
         let result =
             classify_disks(disks.into(), Path::new("/usr"), Path::new("/home/person")).unwrap();

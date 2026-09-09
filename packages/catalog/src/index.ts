@@ -19,6 +19,11 @@ function systemRecipes(
     arguments: platform === 'macos' && ['vscode', 'jdk21', 'jdk25', 'docker'].includes(toolId) ? ['--cask'] : undefined,
     verify: platform !== 'windows' && toolId === 'python' ? verify('python3', '--version') : verifyCommand,
     approved: true,
+    installationLocation: platform === 'windows'
+      ? toolId === 'git' ? { kind: 'directory' as const, executable: 'cmd/git.exe' }
+        : toolId === 'vscode' ? { kind: 'directory' as const, executable: 'Code.exe' }
+          : { kind: 'fixed' as const }
+      : undefined,
   }));
 }
 
@@ -126,7 +131,7 @@ const tools: Tool[] = [
 
 export const catalog: Catalog = {
   schemaVersion: 1,
-  revision: '2026-09-08.1',
+  revision: '2026-09-09.1',
   generatedAt: '2026-09-06T00:00:00Z',
   tools,
   dependencies: [

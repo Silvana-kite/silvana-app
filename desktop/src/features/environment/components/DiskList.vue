@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { HardDrive } from 'lucide-vue-next';
 import { gib, type DiskInfo } from '../services/device';
-defineProps<{ disks: DiskInfo[]; budget: number }>();
+import { driveId } from '../services/installation-locations';
+defineProps<{ disks: DiskInfo[]; budget: number; budgets?: Record<string, number> }>();
 const usedPercent = (disk: DiskInfo) => Math.round((1 - disk.availableBytes / disk.totalBytes) * 100);
 </script>
 
@@ -12,8 +13,8 @@ const usedPercent = (disk: DiskInfo) => Math.round((1 - disk.availableBytes / di
       <li v-for="disk in disks" :key="disk.id" class="disk-inventory__row">
         <HardDrive :size="22" :stroke-width="1.6" />
         <div class="disk-inventory__identity"><strong>{{ disk.label }}</strong><small>{{ disk.id }}</small></div>
-        <span v-if="disk.installationTarget !== false" class="disk-inventory__target">安装相关</span>
-        <div class="disk-inventory__capacity" :class="{ 'is-low': disk.availableBytes < budget }">
+        <span v-if="budgets ? !!budgets[driveId(disk.id) ?? ''] : disk.installationTarget !== false" class="disk-inventory__target">安装相关</span>
+        <div class="disk-inventory__capacity" :class="{ 'is-low': disk.availableBytes < (budgets ? budgets[driveId(disk.id) ?? ''] ?? 0 : budget) }">
           <span>可用 <strong>{{ gib(disk.availableBytes) }}</strong><small> / {{ gib(disk.totalBytes) }}</small></span>
           <progress :value="usedPercent(disk)" max="100" :aria-label="`${disk.label} 已用 ${usedPercent(disk)}%`" />
         </div>

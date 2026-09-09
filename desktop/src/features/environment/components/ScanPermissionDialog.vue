@@ -14,7 +14,7 @@ onBeforeUnmount(() => { dialog.value?.close(); previous?.focus(); });
     <span class="permission-icon"><HardDrive :size="28" :stroke-width="1.5" /></span>
     <h2 id="scan-permission-title">允许检查本地磁盘空间？</h2>
     <p id="scan-permission-copy">Siilvana 将查询所有已挂载本地磁盘（含外接盘）的总容量与可用空间，并检查系统盘和用户目录所在盘是否有足够的安装空间。</p>
-    <div class="permission-note"><ShieldCheck :size="18" /><span>仅查询容量，不读取文件内容。授权仅在本次页面会话内有效。</span></div>
+    <div class="permission-note"><ShieldCheck :size="18" /><span>仅查询容量，不读取文件内容。允许后会在本设备记住，下次进入自动检查。可在设置中关闭。</span></div>
     <p v-if="!isDesktop()" class="permission-web">当前为浏览器模式，无法读取本地磁盘。你仍可查看软件匹配结果或进入手动配置。</p>
     <footer><button class="secondary-button" autofocus @click="emit('deny')">暂不允许</button><button class="primary-button" @click="emit('allow')">允许并扫描</button></footer>
   </dialog></Teleport>

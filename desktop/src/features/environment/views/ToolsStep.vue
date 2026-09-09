@@ -4,7 +4,12 @@ import { Search, X } from 'lucide-vue-next';
 import type { ToolCategory } from '@siilvana/shared';
 import ToolCard from '../components/ToolCard.vue';
 import { useWizardStore } from '../stores/wizard';
+import { useEnvironmentStore } from '../stores/environment';
+import { useInstallerStore } from '../stores/installer';
+import InstallationLocations from '../components/InstallationLocations.vue';
 const store = useWizardStore();
+const environment = useEnvironmentStore();
+const installer = useInstallerStore();
 const categories = computed(() => ['all', ...new Set(store.catalog.tools.map(tool => tool.category))] as Array<ToolCategory | 'all'>);
 const selectedIds = computed(() => new Set(store.plan.selections.map(item => item.toolId)));
 </script>
@@ -22,5 +27,6 @@ const selectedIds = computed(() => new Set(store.plan.selections.map(item => ite
         <ToolCard v-for="tool in store.visibleTools" :key="tool.id" :tool="tool" :platform="store.platform" :architecture="store.architecture" :selected="selectedIds.has(tool.id)" :version-id="store.selected[tool.id]" @toggle="store.toggleTool(tool.id)" @version="store.setVersion(tool.id, $event)" />
       </div>
       <div v-else class="empty-state empty-state--page"><span><Search :size="25" /></span><h2>没有找到工具</h2><p>尝试更换分类或使用更短的关键词。</p></div>
+      <InstallationLocations v-if="store.hasInstallationTargets" v-model="store.installationTargets" :catalog="store.catalog" :plan="store.plan" :disks="environment.disks" :disabled="installer.running || installer.busy" />
     </section>
 </template>

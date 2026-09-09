@@ -13,10 +13,13 @@ async function ready() {
   await store.initialize();
   return store;
 }
+async function rescan(store: ReturnType<typeof useEnvironmentStore>) {
+  const refreshed = await store.requestScan();
+  return store.status === 'permission' ? store.scan(true) : refreshed;
+}
 async function scan() {
   const store = await ready();
-  store.requestScan();
-  await store.scan(true);
+  await rescan(store);
   return store;
 }
 describe('environment permission and installation gates', () => {
@@ -53,11 +56,11 @@ describe('environment permission and installation gates', () => {
   it('checks all volumes and treats the exact budget as sufficient', async () => {
     const store = await ready();
     vi.mocked(readDisks).mockResolvedValue([volume(), volume(store.budget - 1, 'user')]);
-    store.requestScan(); await store.scan(true);
+    await rescan(store);
     expect(store.limitingDisk?.id).toBe('user');
     expect(store.canContinue).toBe(false);
     vi.mocked(readDisks).mockResolvedValue([volume(store.budget)]);
-    store.requestScan(); await store.scan(true);
+    await rescan(store);
     expect(store.canContinue).toBe(true);
   });
   it('includes resolved dependencies and reevaluates larger selections', async () => {
@@ -65,7 +68,7 @@ describe('environment permission and installation gates', () => {
     expect(store.plan.selections.map((item) => item.toolId)).toEqual(expect.arrayContaining(['pnpm', 'node', 'volta']));
     expect(store.budget).toBe(requiredBytes(store.plan.estimatedDiskMb));
     vi.mocked(readDisks).mockResolvedValue([volume(store.budget)]);
-    store.requestScan(); await store.scan(true); store.commit();
+    await rescan(store); store.commit();
     useWizardStore().toggleTool('docker');
     expect(store.wizardCanContinue()).toBe(false);
   });
@@ -93,7 +96,7 @@ describe('environment permission and installation gates', () => {
   });
   it('invalidates a scan even when the target is changed and then restored', async () => {
     const store = await scan(); store.targetArchitecture = 'arm64'; store.targetArchitecture = 'x64';
-    expect(store.canContinue).toBe(false); expect(store.consent).toBe(false);
+    expect(store.canContinue).toBe(false); expect(store.consent).toBe(true);
   });
   it('invalidates a committed scan when wizard architecture changes', async () => {
     const store = await scan(); store.commit();
@@ -104,14 +107,14 @@ describe('environment permission and installation gates', () => {
     let resolve!: (value: ReturnType<typeof volume>[]) => void;
     vi.mocked(readDisks).mockImplementation(() => new Promise((done) => { resolve = done; }));
     const store = await ready(); store.requestScan(); const pending = store.scan(true);
-    store.requestScan(); await store.scan(true);
+    await rescan(store);
     expect(readDisks).toHaveBeenCalledTimes(1);
     store.targetArchitecture = 'arm64'; resolve([volume()]); await pending;
     expect(store.validScan).toBe(false); expect(store.disks).toEqual([]);
   });
   it('drops stale capacity when a new read fails', async () => {
     const store = await scan(); vi.mocked(readDisks).mockRejectedValue(new Error('disk unavailable'));
-    store.requestScan(); await store.scan(true);
+    await rescan(store);
     expect(store.disks).toEqual([]); expect(store.error).toBe('disk unavailable'); expect(store.canContinue).toBe(false);
   });
   it('keeps browsers unsupported without invoking disk access', async () => {
@@ -132,15 +135,89 @@ describe('environment permission and installation gates', () => {
     vi.mocked(readDisks).mockImplementation(async () => { useWizardStore().toggleTool('python'); return [volume()]; });
     expect(await store.verifyExport()).toBe(false);
   });
-  it('retains smart mode across reload without restoring consent', async () => {
+  it('restores consent and scans automatically after reload', async () => {
     const store = await scan(); store.commit();
     await new Promise((resolve) => setTimeout(resolve, 20));
     setActivePinia(createPinia()); const restored = await ready();
-    expect(useWizardStore().validationMode).toBe('smart'); expect(restored.wizardCanContinue()).toBe(false);
+    expect(useWizardStore().validationMode).toBe('smart'); expect(restored.wizardCanContinue()).toBe(true);
+    expect(restored.consent).toBe(true); expect(readDisks).toHaveBeenCalledTimes(2);
+  });
+  it('reuses the current result on return and refreshes without asking again', async () => {
+    const store = await scan();
+    await store.initialize();
+    expect(readDisks).toHaveBeenCalledTimes(1);
+    vi.mocked(readDisks).mockResolvedValue([volume(1)]);
+    expect(await store.requestScan()).toBe(true);
+    expect(store.status).toBe('complete'); expect(store.consent).toBe(true);
+    expect(store.canContinue).toBe(false); expect(readDisks).toHaveBeenCalledTimes(2);
+  });
+  it('never restores stale capacity when the automatic refresh fails', async () => {
+    await scan(); await new Promise(resolve => setTimeout(resolve, 20));
+    vi.mocked(readDisks).mockRejectedValue(new Error('Disconnected'));
+    setActivePinia(createPinia()); const store = await ready();
+    expect(store.consent).toBe(true); expect(store.status).toBe('error');
+    expect(store.disks).toEqual([]); expect(store.canContinue).toBe(false);
+    vi.mocked(readDisks).mockResolvedValue([volume()]);
+    expect(await store.requestScan()).toBe(true); expect(store.status).toBe('complete');
+  });
+  it('revokes remembered consent in settings and requires approval on the next scan', async () => {
+    const store = await scan(); useWizardStore().diskScanConsent = false;
+    expect(store.validScan).toBe(false); expect(store.disks).toEqual([]);
+    await store.initialize(); expect(readDisks).toHaveBeenCalledTimes(1);
+    await store.requestScan(); expect(store.status).toBe('permission');
+    await store.scan(true); expect(readDisks).toHaveBeenCalledTimes(2);
+  });
+  it('discards an in-flight scan if consent is revoked and re-enabled', async () => {
+    const store = await scan();
+    let finish!: (value: ReturnType<typeof volume>[]) => void;
+    vi.mocked(readDisks).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const pending = store.requestScan();
+    useWizardStore().diskScanConsent = false; useWizardStore().diskScanConsent = true;
+    finish([volume()]); expect(await pending).toBe(false);
+    expect(store.validScan).toBe(false); expect(store.disks).toEqual([]);
+  });
+  it('deduplicates automatic scans during concurrent initialization', async () => {
+    await scan(); await new Promise(resolve => setTimeout(resolve, 20));
+    setActivePinia(createPinia()); vi.mocked(readDisks).mockClear();
+    const store = useEnvironmentStore();
+    await Promise.all([store.initialize(), store.initialize()]);
+    expect(readDisks).toHaveBeenCalledTimes(1); expect(store.validScan).toBe(true);
+  });
+  it('does not read disks in a browser even with remembered permission', async () => {
+    await scan(); await new Promise(resolve => setTimeout(resolve, 20));
+    setActivePinia(createPinia()); vi.mocked(readDisks).mockClear(); vi.mocked(isDesktop).mockReturnValue(false);
+    const store = await ready();
+    expect(store.consent).toBe(true); expect(readDisks).not.toHaveBeenCalled(); expect(store.validScan).toBe(false);
   });
   it('labels universal recipes and omits tools with unavailable dependencies', async () => {
     const store = await ready(); expect(store.matched.find((item) => item.tool.id === 'node')?.universal).toBe(true);
     useWizardStore().catalog = { ...useWizardStore().catalog, tools: useWizardStore().catalog.tools.filter((item) => item.id !== 'volta') };
     expect(store.matched.some((item) => item.tool.id === 'node')).toBe(false);
+  });
+  it('keeps per-tool disks through commit, re-scan and persisted wizard state', async () => {
+    vi.mocked(readDisks).mockResolvedValue(['C:\\', 'D:\\', 'E:\\'].map(id => ({ ...volume(80 * 1024 ** 3, id), systemTarget: id === 'C:\\', temporaryTarget: id === 'C:\\' })));
+    const store = await scan();
+    store.installationTargets.git = 'D:\\'; store.installationTargets.vscode = 'E:\\';
+    expect(store.commit()).toBe(true);
+    expect(useWizardStore().installationTargets.git).toBe('D:\\');
+    expect(useWizardStore().installationTargets.vscode).toBe('E:\\');
+    expect(await store.verifyExport()).toBe(false);
+    await rescan(store);
+    expect(store.installationTargets.git).toBe('D:\\');
+    await new Promise(resolve => setTimeout(resolve, 20));
+    setActivePinia(createPinia()); const restored = await ready();
+    expect(restored.installationTargets.git).toBe('D:\\');
+    expect(restored.wizardCanContinue()).toBe(true);
+  });
+  it('blocks a disconnected selected disk and a newly added unassigned dependency', async () => {
+    vi.mocked(readDisks).mockResolvedValue(['C:\\', 'D:\\'].map(id => ({ ...volume(80 * 1024 ** 3, id), systemTarget: id === 'C:\\', temporaryTarget: id === 'C:\\' })));
+    const store = await scan(); store.installationTargets.git = 'D:\\'; store.commit();
+    useWizardStore().toggleTool('docker');
+    expect(store.wizardCanContinue()).toBe(false);
+    vi.mocked(readDisks).mockResolvedValue([{ ...volume(80 * 1024 ** 3, 'C:\\'), systemTarget: true, temporaryTarget: true }]);
+    await rescan(store);
+    expect(store.installationTargets.git).toBe('D:\\');
+    expect(store.canContinue).toBe(false);
+    expect(store.targetErrors.join()).toContain('D:\\');
   });
 });

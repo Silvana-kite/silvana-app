@@ -16,6 +16,8 @@ pub struct Request {
     pub selections: Vec<Selection>,
     pub catalog_revision: String,
     pub fingerprint: String,
+    #[serde(default)]
+    pub installation_targets: HashMap<String, String>,
 }
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +65,13 @@ pub struct Recipe {
     pub arguments: Option<Vec<String>>,
     pub verify: Process,
     pub approved: bool,
+    pub installation_location: Option<InstallationLocation>,
+}
+#[derive(Clone, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum InstallationLocation {
+    Directory { executable: String },
+    Fixed,
 }
 #[derive(Clone, Deserialize)]
 pub struct Process {
@@ -82,6 +91,7 @@ pub struct Resolved {
     pub tool: Tool,
     pub version: Version,
     pub recipe: Option<Recipe>,
+    pub target_disk: Option<String>,
 }
 
 pub fn embedded() -> Catalog {
@@ -175,9 +185,11 @@ pub fn resolve(request: &Request) -> Result<Vec<Resolved>, String> {
                 tool: tool.clone(),
                 version: version.clone(),
                 recipe: None,
+                target_disk: None,
             });
         }
     }
+    super::locations::assign(request, &mut ordered)?;
     Ok(ordered)
 }
 
@@ -256,6 +268,7 @@ fn visit(
         tool: tool.clone(),
         version,
         recipe,
+        target_disk: None,
     });
     Ok(())
 }
@@ -320,6 +333,7 @@ mod tests {
             }],
             catalog_revision: embedded().revision,
             fingerprint: "test".into(),
+            installation_targets: HashMap::new(),
         }
     }
     #[test]

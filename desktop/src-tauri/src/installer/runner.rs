@@ -23,6 +23,12 @@ pub fn run(
         }
         if session.steps[index].status == "skipped" {
             if let Ok((version, path)) = backend.verify(item) {
+                if let Err(error) = super::locations::verify_path(item, path.as_deref()) {
+                    session.steps[index].status = "failed".into();
+                    session.steps[index].message = error;
+                    session.status = "failed".into();
+                    return publish(session);
+                }
                 if catalog::satisfies(&version, &item.version.accepted_range) {
                     session.steps[index].installed_version = Some(version);
                     session.steps[index].executable_path = path;
@@ -55,7 +61,9 @@ pub fn run(
             .and_then(|()| backend.verify(item))
             .and_then(|(version, path)| {
                 session.steps[index].installed_version = Some(version.clone());
+                let location = super::locations::verify_path(item, path.as_deref());
                 session.steps[index].executable_path = path;
+                location?;
                 if catalog::satisfies(&version, &item.version.accepted_range) {
                     Ok(())
                 } else {
@@ -136,6 +144,7 @@ mod tests {
             ],
             catalog_revision: catalog::embedded().revision,
             fingerprint: "fixture".into(),
+            installation_targets: Default::default(),
         };
         let items = catalog::resolve(&request).unwrap();
         let session = Session {
@@ -150,6 +159,8 @@ mod tests {
                     version: i.version.version.clone(),
                     installed_version: None,
                     executable_path: None,
+                    target_disk: None,
+                    install_directory: None,
                     status: "pending".into(),
                     message: String::new(),
                 })
@@ -160,6 +171,56 @@ mod tests {
             request: Some(request),
         };
         (session, items)
+    }
+    #[test]
+    fn a_successful_process_or_skipped_version_cannot_bypass_the_target_disk() {
+        struct WrongDisk {
+            installs: usize,
+        }
+        impl Backend for WrongDisk {
+            fn install(&mut self, _: &Resolved, _: &mut dyn FnMut(String)) -> Result<(), String> {
+                self.installs += 1;
+                Ok(())
+            }
+            fn verify(&mut self, _: &Resolved) -> Result<(String, Option<String>), String> {
+                Ok((
+                    "2.50.0".into(),
+                    Some(
+                        std::env::current_exe()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                ))
+            }
+        }
+        for skipped in [false, true] {
+            let (mut session, mut items) = fixture();
+            let actual = std::env::current_exe().unwrap();
+            items[0].target_disk = Some(
+                if super::super::locations::on_disk(&actual, "Z:\\") {
+                    "Y:\\"
+                } else {
+                    "Z:\\"
+                }
+                .into(),
+            );
+            if skipped {
+                session.steps[0].status = "skipped".into();
+            }
+            let mut backend = WrongDisk { installs: 0 };
+            run(
+                &mut session,
+                &items,
+                &AtomicBool::new(false),
+                &mut backend,
+                &mut |_| Ok(()),
+            )
+            .unwrap();
+            assert_eq!(session.status, "failed");
+            assert_eq!(session.steps[1].status, "pending");
+            assert_eq!(backend.installs, usize::from(!skipped));
+        }
     }
     #[test]
     fn failure_stops_dependents_and_retains_reason() {

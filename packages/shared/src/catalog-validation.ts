@@ -56,6 +56,13 @@ export function isCatalog(value: unknown): value is Catalog {
         || !record(recipe.verify)
         || typeof recipe.verify.executable !== 'string'
         || !strings(recipe.verify.args)) return false;
+      if (recipe.installationLocation !== undefined) {
+        const location = recipe.installationLocation;
+        if (!record(location) || !['fixed', 'directory'].includes(String(location.kind))) return false;
+        if (location.kind === 'directory' && (recipe.platform !== 'windows' || recipe.manager !== 'winget'
+          || typeof location.executable !== 'string' || !/^[a-z0-9_-]+(?:\/[a-z0-9_.-]+)*\.exe$/i.test(location.executable)
+          || location.executable.split('/').some(part => part === '..'))) return false;
+      }
     }
   }
 

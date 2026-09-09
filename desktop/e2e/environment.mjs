@@ -107,6 +107,8 @@ try {
   assert.notEqual(first.hash, second.hash, 'scanning canvas is static');
   await page.locator('.adapt-metric--disk.is-ready').waitFor();
   assert.equal(await page.locator('.disk-inventory__row').count(), 3);
+  assert.equal(await page.locator('.disk-overview__item').count(), 3);
+  await page.locator('.disk-overview').getByText('External SSD可用空间', { exact: true }).waitFor();
   await page.getByText('已扫描 3 个磁盘', { exact: true }).waitFor();
   for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -126,15 +128,15 @@ try {
   await page.getByText('磁盘校验未通过或方案已变化', { exact: false }).waitFor();
   assert.equal(await page.getByRole('button', { name: '下载脚本' }).isEnabled(), false);
   await page.getByRole('link', { name: '返回适配中心' }).click();
-  await page.getByRole('button', { name: '开始智能扫描', exact: true }).click();
-  await page.getByRole('button', { name: '允许并扫描' }).click();
+  await page.getByRole('button', { name: '重新扫描', exact: true }).click();
+  assert.equal(await page.locator('dialog').count(), 0);
   await page.locator('.adapt-metric--disk.is-low').waitFor();
   await page.getByRole('button', { name: '释放空间', exact: true }).click();
   await page.locator('.adapt-cleanup').waitFor();
   await page.screenshot({ path: output + 'scan-low-space.png', fullPage: true });
   await page.evaluate(() => { window.diskFail = true; });
-  await page.getByRole('button', { name: '开始智能扫描', exact: true }).click();
-  await page.getByRole('button', { name: '允许并扫描' }).click();
+  await page.getByRole('button', { name: '重新扫描', exact: true }).click();
+  assert.equal(await page.locator('dialog').count(), 0);
   await page.getByText('测试：磁盘不可用', { exact: true }).first().waitFor();
   assert.equal(await page.locator('.adapt-metric--disk.is-ready').count(), 0);
   assert.equal(await page.getByRole('button', { name: '下一步', exact: true }).isEnabled(), false);

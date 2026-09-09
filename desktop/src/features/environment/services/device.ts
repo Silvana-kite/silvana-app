@@ -13,6 +13,8 @@ export interface DiskInfo {
   totalBytes: number;
   availableBytes: number;
   installationTarget?: boolean;
+  systemTarget?: boolean;
+  temporaryTarget?: boolean;
 }
 export const installationDisks = (disks: DiskInfo[]) => disks.filter(disk => disk.installationTarget !== false);
 export const isDesktop = () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;

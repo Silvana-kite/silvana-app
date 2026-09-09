@@ -14,7 +14,7 @@ const expanded = ref(false);
 const platformNames = { windows: 'Windows', macos: 'macOS', linux: 'Ubuntu / Debian' };
 const detectedTarget = computed(() => wizard.platform === environment.device.platform && wizard.architecture === environment.device.architecture);
 const verifiedDisk = computed(() => environment.validScan && detectedTarget.value && environment.installDisks.length > 0);
-const enough = computed(() => verifiedDisk.value && environment.installDisks.every(d => d.availableBytes >= requiredBytes(wizard.plan.estimatedDiskMb)));
+const enough = computed(() => wizard.hasInstallationTargets ? environment.wizardCanContinue() : verifiedDisk.value && environment.installDisks.every(d => d.availableBytes >= requiredBytes(wizard.plan.estimatedDiskMb)));
 const diskLabel = computed(() => !isDesktop() ? '磁盘空间未验证' : !detectedTarget.value ? '目标预览' : environment.status === 'scanning' ? '正在检测磁盘' : verifiedDisk.value ? enough.value ? '磁盘空间充足' : '磁盘空间不足' : '磁盘空间待检测');
 const counts = computed(() => Object.fromEntries(wizard.catalog.templates.map(template => {
   const selections = template.items.flatMap(item => {
@@ -41,14 +41,19 @@ function manual() {
   environment.targetArchitecture = wizard.architecture;
   if (wizard.templateId && wizard.templateId !== 'custom') wizard.applyTemplate(wizard.templateId);
 }
-function requestScan() {
+async function requestScan() {
   environment.targetPlatform = wizard.platform;
   environment.targetArchitecture = wizard.architecture;
   environment.candidate = { ...wizard.selected };
-  environment.requestScan();
+  if (wizard.hasInstallationTargets) environment.installationTargets = { ...wizard.installationTargets };
+  if (await environment.requestScan()) acceptScan();
+}
+function acceptScan() {
+  if (environment.choosingDisks) wizard.installationTargets = { ...environment.installationTargets };
+  wizard.setValidationMode('smart');
 }
 async function scan() {
-  if (await environment.scan(true)) wizard.setValidationMode('smart');
+  if (await environment.scan(true)) acceptScan();
 }
 function moveSelection(event: KeyboardEvent) {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;

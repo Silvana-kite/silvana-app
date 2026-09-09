@@ -11,6 +11,7 @@ import {
   type ToolCategory,
 } from '@siilvana/shared';
 import { SiilvanaApiClient } from '@siilvana/api-client';
+import { effectiveTargets } from '../services/installation-locations';
 import { loadCatalogCache, saveCatalogCache } from '../services/catalog-cache';
 import {
   loadWorkspaceState,
@@ -46,6 +47,7 @@ export const useWizardStore = defineStore('wizard', () => {
   const platform = ref<Platform>(detectedPlatform());
   const architecture = ref<Architecture>('x64');
   const selected = ref<Record<string, string>>({});
+  const installationTargets = ref<Record<string, string>>({});
   const templateId = ref<string | null>(null);
   const targetMode = ref<'auto' | 'manual'>('auto');
   const validationMode = ref<'smart' | 'manual'>('manual');
@@ -55,6 +57,7 @@ export const useWizardStore = defineStore('wizard', () => {
   const online = ref<boolean | null>(null);
   const initialized = ref(false);
   const syncOnLaunch = ref(true);
+  const diskScanConsent = ref(false);
   const motion = ref<MotionPreference>('system');
   const activities = ref<ActivityRecord[]>([]);
   let saveChain = Promise.resolve();
@@ -78,6 +81,9 @@ export const useWizardStore = defineStore('wizard', () => {
       && (!term || `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(term));
   }));
   const hasErrors = computed(() => plan.value.diagnostics.some((item) => item.severity === 'error'));
+  const hasInstallationTargets = computed(() => platform.value === 'windows' && Object.keys(installationTargets.value).length > 0);
+  const resolvedInstallationTargets = computed(() => hasInstallationTargets.value
+    ? effectiveTargets(catalog.value, plan.value, installationTargets.value) : {});
   const unreadActivities = computed(() => activities.value.filter((item) => !item.read).length);
 
   function snapshot(): WorkspaceStateV1 {
@@ -87,11 +93,12 @@ export const useWizardStore = defineStore('wizard', () => {
         platform: platform.value,
         architecture: architecture.value,
         selected: { ...selected.value },
+        installationTargets: { ...installationTargets.value },
         validationMode: validationMode.value,
         templateId: templateId.value,
         targetMode: targetMode.value,
       },
-      preferences: { syncOnLaunch: syncOnLaunch.value, motion: motion.value },
+      preferences: { syncOnLaunch: syncOnLaunch.value, diskScanConsent: diskScanConsent.value, motion: motion.value },
       activities: activities.value.slice(0, 50).map((item) => ({ ...item })),
     };
   }
@@ -125,6 +132,7 @@ export const useWizardStore = defineStore('wizard', () => {
 
   function startBlankPlan() {
     selected.value = {};
+    installationTargets.value = {};
     templateId.value = null;
     search.value = '';
     category.value = 'all';
@@ -228,10 +236,12 @@ export const useWizardStore = defineStore('wizard', () => {
       platform.value = saved.wizard.platform;
       architecture.value = saved.wizard.architecture;
       selected.value = { ...saved.wizard.selected };
+      installationTargets.value = { ...saved.wizard.installationTargets };
       validationMode.value = saved.wizard.validationMode ?? 'manual';
       templateId.value = saved.wizard.templateId ?? (Object.keys(saved.wizard.selected).length ? 'custom' : null);
       targetMode.value = saved.wizard.targetMode ?? 'manual';
       syncOnLaunch.value = saved.preferences.syncOnLaunch;
+      diskScanConsent.value = saved.preferences.diskScanConsent ?? false;
       motion.value = saved.preferences.motion;
       activities.value = saved.activities.slice(0, 50);
     }
@@ -241,14 +251,15 @@ export const useWizardStore = defineStore('wizard', () => {
     }
   }
 
-  watch([platform, architecture, selected, templateId, targetMode, validationMode, syncOnLaunch, motion, activities], persist, { deep: true });
+  watch([platform, architecture, selected, installationTargets, templateId, targetMode, validationMode, syncOnLaunch, diskScanConsent, motion, activities], persist, { deep: true });
 
   return {
     step, catalog, platform, architecture, selected, templateId, targetMode, search, category, syncing, online,
-    initialized, syncOnLaunch, motion, activities, categoryLabels, explicitSelections,
+    initialized, syncOnLaunch, diskScanConsent, motion, activities, categoryLabels, explicitSelections,
     plan, visibleTools, hasErrors, unreadActivities, applyTemplate, startBlankPlan,
     toggleTool, setVersion, focusTool, recordExport, markActivityRead,
     markAllActivitiesRead, clearActivities, syncCatalog, initialize,
     validationMode, setValidationMode, recordScan,
+    installationTargets, hasInstallationTargets, resolvedInstallationTargets,
   };
 });

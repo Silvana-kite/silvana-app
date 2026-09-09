@@ -32,6 +32,8 @@ export interface InstallRecipe {
   arguments?: string[];
   verify: { executable: string; args: string[] };
   approved: boolean;
+  /** Only reviewed Windows recipes may opt into custom installation directories. */
+  installationLocation?: { kind: 'directory'; executable: string } | { kind: 'fixed' };
 }
 
 export interface Tool {

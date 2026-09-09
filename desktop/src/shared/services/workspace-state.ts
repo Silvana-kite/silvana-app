@@ -21,12 +21,14 @@ export interface WorkspaceStateV1 {
     platform: Platform;
     architecture: Architecture;
     selected: Record<string, string>;
+    installationTargets?: Record<string, string>;
     validationMode?: 'smart' | 'manual';
     templateId?: string | null;
     targetMode?: 'auto' | 'manual';
   };
   preferences: {
     syncOnLaunch: boolean;
+    diskScanConsent?: boolean;
     motion: MotionPreference;
   };
   activities: ActivityRecord[];
@@ -69,11 +71,13 @@ export function isWorkspaceState(value: unknown): value is WorkspaceStateV1 {
     && platforms.has(state.wizard.platform)
     && architectures.has(state.wizard.architecture)
     && isStringRecord(state.wizard.selected)
+    && (state.wizard.installationTargets === undefined || isStringRecord(state.wizard.installationTargets))
     && (state.wizard.validationMode === undefined || ['smart', 'manual'].includes(state.wizard.validationMode))
     && (state.wizard.templateId == null || typeof state.wizard.templateId === 'string')
     && (state.wizard.targetMode === undefined || ['auto', 'manual'].includes(state.wizard.targetMode))
     && !!state.preferences
     && typeof state.preferences.syncOnLaunch === 'boolean'
+    && (state.preferences.diskScanConsent === undefined || typeof state.preferences.diskScanConsent === 'boolean')
     && motions.has(state.preferences.motion)
     && Array.isArray(state.activities)
     && state.activities.every(isActivity);

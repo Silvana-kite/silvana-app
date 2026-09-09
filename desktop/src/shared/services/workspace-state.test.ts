@@ -29,4 +29,11 @@ describe('workspace state persistence', () => {
     localStorage.setItem('workspace-state-v1', '{broken');
     await expect(loadWorkspaceState()).resolves.toBeUndefined();
   });
+  it('persists explicit disk consent and rejects non-boolean preferences', async () => {
+    const state = { ...validState, preferences: { ...validState.preferences, diskScanConsent: true } };
+    await saveWorkspaceState(state);
+    expect((await loadWorkspaceState())?.preferences.diskScanConsent).toBe(true);
+    expect(isWorkspaceState({ ...state, preferences: { ...state.preferences, diskScanConsent: 'true' } })).toBe(false);
+    expect(isWorkspaceState(validState)).toBe(true);
+  });
 });

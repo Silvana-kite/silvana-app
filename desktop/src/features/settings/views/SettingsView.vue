@@ -26,6 +26,10 @@ function clearHistory() {
 
     <section class="settings-section">
       <div class="settings-section__heading"><span><Monitor :size="19" /></span><div><h2>环境默认值</h2><p>用于当前方案和之后创建的环境配置。</p></div></div>
+      <label class="setting-row">
+        <span><strong>记住磁盘扫描授权</strong><small>进入适配中心时自动检查磁盘，无需重复授权。关闭后，下次扫描会重新询问。</small></span>
+        <input v-model="store.diskScanConsent" class="switch-input" type="checkbox" role="switch" aria-label="记住磁盘扫描授权" />
+      </label>
       <div class="setting-row">
         <span><strong>目标系统</strong><small>安装脚本将匹配对应的平台包管理器。</small></span>
         <label class="select-control">

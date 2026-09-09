@@ -13,7 +13,9 @@
     "test": "vitest run --passWithNoTests",
     "test:e2e:scenario": "node e2e/scenario.mjs",
     "test:e2e:installation": "node e2e/installation.mjs",
+    "test:e2e:installation-locations": "node e2e/installation-locations.mjs",
     "test:e2e:environment": "node e2e/environment.mjs",
+    "test:e2e:scan-consent": "node e2e/scan-consent.mjs",
     "test:e2e:showroom": "node e2e/showroom.mjs"
   },
   "dependencies": {

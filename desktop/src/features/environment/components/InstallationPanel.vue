@@ -13,13 +13,13 @@ const labels = { prepared: '方案已检查', running: '正在安装', cancellin
 const stepLabels = { pending: '待安装', skipped: '已满足', running: '安装中', success: '已验证', failed: '失败' };
 const visible = computed(() => installer.current || installer.running || installer.session?.status === 'interrupted');
 async function prepare() {
-  if (environment.consent) await installer.prepare(true);
+  if (environment.consent) { await environment.initialize(); await installer.prepare(true); }
   else permission.value = true;
 }
-async function allow() { permission.value = false; environment.consent = true; await installer.prepare(true); }
+async function allow() { permission.value = false; environment.consent = true; await prepare(); }
 onMounted(async () => {
   await installer.restore();
-  if (props.review && environment.consent && !installer.running) await installer.prepare(true);
+  if (props.review && environment.consent && !installer.running) await prepare();
 });
 </script>
 
@@ -32,7 +32,7 @@ onMounted(async () => {
       <div v-for="blocker in installer.session.blockers" :key="blocker.message" class="install-blocker"><TriangleAlert :size="14" /> {{ blocker.message }}<a v-if="blocker.url" :href="blocker.url" target="_blank" rel="noopener noreferrer">官方安装入口</a></div>
       <div v-for="step in installer.session.steps" :key="step.toolId" class="execution-row">
         <Check v-if="['skipped','success'].includes(step.status)" :size="18" class="text-success" /><LoaderCircle v-else-if="step.status === 'running'" :size="18" class="spin" /><TriangleAlert v-else-if="step.status === 'failed'" :size="18" /><Circle v-else :size="16" />
-        <div><strong>{{ step.name }} <span>{{ step.version }}</span></strong><small v-if="step.installedVersion">本机 {{ step.installedVersion }}<template v-if="step.status === 'pending'"> → {{ step.version }}</template></small><small v-if="step.message">{{ step.message }}</small><small v-if="step.executablePath">{{ step.executablePath }}</small></div>
+        <div><strong>{{ step.name }} <span>{{ step.version }}</span></strong><small v-if="step.installedVersion">本机 {{ step.installedVersion }}<template v-if="step.status === 'pending'"> → {{ step.version }}</template></small><small v-if="step.targetDisk">目标磁盘 {{ step.targetDisk }}<template v-if="step.installDirectory"> · {{ step.installDirectory }}</template></small><small v-if="step.message">{{ step.message }}</small><small v-if="step.executablePath">{{ step.executablePath }}</small></div>
         <span :class="['execution-state', { 'is-success': ['success','skipped'].includes(step.status), 'is-error': step.status === 'failed' }]">{{ stepLabels[step.status] }}</span>
       </div>
       <details v-if="!review && installer.session.logs.length"><summary>安装日志</summary><pre class="install-log">{{ installer.session.logs.join('\n') }}</pre></details>
