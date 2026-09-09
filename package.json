@@ -1,0 +1,28 @@
+{
+  "name": "siilvana-app",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": "24.x",
+    "pnpm": "10.x"
+  },
+  "volta": {
+    "node": "24.20.0",
+    "npm": "11.19.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @siilvana/shared build && pnpm --filter @siilvana/catalog build && pnpm --parallel --filter @siilvana/server --filter @siilvana/desktop dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "catalog:validate": "pnpm --filter @siilvana/shared build && pnpm --filter @siilvana/catalog validate",
+    "check": "pnpm catalog:validate && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}

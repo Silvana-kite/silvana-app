@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nestjs",
+  "crons": [
+    {
+      "path": "/internal/cron/catalog-sync",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}
+

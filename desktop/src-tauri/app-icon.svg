@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Siilvana">
+  <rect width="512" height="512" rx="96" fill="#17201d"/>
+  <path d="M150 146h100c66 0 112 43 112 110s-46 110-112 110H150" fill="none" stroke="#f4f7f5" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M150 256h126" fill="none" stroke="#43b581" stroke-width="52" stroke-linecap="round"/>
+</svg>
