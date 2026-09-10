@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use base64::{engine::general_purpose::STANDARD, Engine};
+use ed25519_dalek::{Signature, VerifyingKey};
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -95,8 +97,13 @@ pub struct Resolved {
 }
 
 pub fn embedded() -> Catalog {
-    serde_json::from_str(include_str!(concat!(env!("OUT_DIR"), "/catalog.json")))
-        .expect("invalid embedded catalog")
+    let signed: serde_json::Value = serde_json::from_str(include_str!(concat!(env!("OUT_DIR"), "/native-catalog.signed.json"))).expect("Invalid recipe envelope");
+    let key: [u8; 32] = STANDARD.decode(include_str!(concat!(env!("OUT_DIR"), "/native-catalog.public-key")).trim()).expect("Invalid recipe key").try_into().expect("Invalid key length");
+    let payload = STANDARD.decode(signed["payload"].as_str().expect("Missing payload")).expect("Invalid payload");
+    let signature = Signature::from_slice(&STANDARD.decode(signed["signature"].as_str().expect("Missing signature")).expect("Invalid signature")).expect("Invalid signature length");
+    VerifyingKey::from_bytes(&key).expect("Invalid recipe key").verify_strict(&payload, &signature).expect("Native recipe signature failed");
+    assert_eq!(payload.as_slice(), include_bytes!(concat!(env!("OUT_DIR"), "/catalog.json")), "Reviewed recipes changed; sign and review the new catalog");
+    serde_json::from_slice(&payload).expect("invalid embedded catalog")
 }
 
 pub fn resolve(request: &Request) -> Result<Vec<Resolved>, String> {

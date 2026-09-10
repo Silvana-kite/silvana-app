@@ -28,7 +28,7 @@ async function show() {
       if (payload.kind === 'download') { clearTimeout(loadTimer); error.value = ''; status.value = '文件下载'; downloads.value.unshift(payload.value); downloads.value = downloads.value.slice(0, 5); }
     });
     if (turn !== generation || !browser.open) return;
-    await invoke('browser_open', { url: browser.requestedUrl, bounds: bounds() });
+    await invoke('browser_open', { url: browser.requestedUrl, expectedSha256: browser.expectedSha256, bounds: bounds() });
     resize?.disconnect(); resize = new ResizeObserver(() => void resizeSurface()); resize.observe(surface.value!);
   } catch (cause) { clearTimeout(loadTimer); error.value = String(cause); status.value = '加载失败'; }
 }

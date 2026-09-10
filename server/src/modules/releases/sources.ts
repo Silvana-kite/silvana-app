@@ -1,17 +1,18 @@
+import { extendedSources, parseExtended } from './extended-sources.js';
 import { load } from 'cheerio';
 import type { ReleaseAsset, ToolRelease } from '@siilvana/shared';
 
-export interface ReleaseSource { toolId: string; kind: string; urls: string[]; repository?: string }
+export interface ReleaseSource { toolId: string; kind: string; urls: string[]; repository?: string; coverage?: 'full' | 'partial'; scope?: string }
 const github: Record<string, string> = {
   volta: 'volta-cli/volta', fnm: 'Schniz/fnm', nvm: 'nvm-sh/nvm', 'nvm-windows': 'coreybutler/nvm-windows',
   bun: 'oven-sh/bun', deno: 'denoland/deno', 'github-cli': 'cli/cli', 'github-desktop': 'desktop/desktop',
   powershell: 'PowerShell/PowerShell', 'windows-terminal': 'microsoft/terminal', bruno: 'usebruno/bruno',
 };
 export const sources: ReleaseSource[] = [
-  { toolId: 'node', kind: 'node', urls: ['https://nodejs.org/dist/index.json'] },
+  { toolId: 'node', kind: 'node', coverage: 'full', scope: 'Node.js ????????????', urls: ['https://nodejs.org/dist/index.json'] },
   ...['npm', 'pnpm'].map(toolId => ({ toolId, kind: 'registry', urls: [`https://registry.npmjs.org/${toolId}`] })),
   { toolId: 'yarn', kind: 'registry', urls: ['https://registry.npmjs.org/yarn', 'https://registry.npmjs.org/@yarnpkg%2fcli-dist'] },
-  ...Object.entries(github).map(([toolId, repository]) => ({ toolId, repository, kind: 'github', urls: [`https://api.github.com/repos/${repository}/releases?per_page=${toolId === 'powershell' ? 30 : 100}`] })),
+  ...Object.entries(github).map(([toolId, repository]) => ({ toolId, repository, kind: 'github', urls: [`https://api.github.com/repos/${repository}/releases?per_page=${['powershell', 'deno'].includes(toolId) ? 30 : 100}`] })),
   { toolId: 'vscode', kind: 'vscode', urls: ['https://api.github.com/repos/microsoft/vscode/tags?per_page=100'] },
   { toolId: 'git', kind: 'git', urls: ['https://www.kernel.org/pub/software/scm/git/'] },
   { toolId: 'webstorm', kind: 'jetbrains', urls: ['https://data.services.jetbrains.com/products/releases?code=WS&type=release'] },
@@ -19,7 +20,8 @@ export const sources: ReleaseSource[] = [
   { toolId: 'edge', kind: 'edge', urls: ['https://edgeupdates.microsoft.com/api/products?view=enterprise', 'https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnote-stable-channel', 'https://learn.microsoft.com/en-us/deployedge/microsoft-edge-relnote-archive-stable-channel'] },
   { toolId: 'firefox', kind: 'firefox', urls: ['https://product-details.mozilla.org/1.0/firefox_history_major_releases.json', 'https://product-details.mozilla.org/1.0/firefox_history_stability_releases.json', 'https://product-details.mozilla.org/1.0/firefox_history_development_releases.json'] },
   { toolId: 'postman', kind: 'postman-json', urls: ['https://mkt.cdn.postman.com/www-next/release-notes/app-release-notes.json'] },
-  { toolId: 'docker', kind: 'docker', urls: ['https://docs.docker.com/desktop/release-notes/'] },
+  { toolId: 'docker', kind: 'docker-markdown', scope: 'Docker 官方文档仓库当前公开的 Desktop 发布记录', urls: ['https://api.github.com/repos/docker/docs/contents/content/manuals/desktop/release-notes.md'] },
+  ...extendedSources,
 ];
 
 export const NODE_SCHEDULE = 'https://raw.githubusercontent.com/nodejs/Release/main/schedule.json';
@@ -53,19 +55,21 @@ export function asset(name: string, url: string, kind: ReleaseAsset['kind'] = 'b
 export function mergeReleases(items: ToolRelease[]): ToolRelease[] {
   const merged = new Map<string, ToolRelease>();
   for (const item of items) {
-    if (!/^\d+(?:\.\d+)+(?:esr|-[a-zA-Z0-9.]+)?$/.test(item.version) || !safeUrl(item.pageUrl)) continue;
+    if (!/^\d+(?:\.\d+)+(?:esr|[ab]\d+|rc\d+)?(?:[-+][a-zA-Z0-9.+-]+)?$/.test(item.version) || !safeUrl(item.pageUrl)) continue;
     item.assets = item.assets.filter(a => safeUrl(a.url));
-    const existing = merged.get(item.version);
-    if (!existing) { merged.set(item.version, { ...item, assets: [...item.assets] }); continue; }
+    const identity = JSON.stringify([item.originalVersion, item.build ?? '', item.releaseTrack ?? (item.isPrerelease ? 'preview' : 'stable')]);
+    const existing = merged.get(identity);
+    if (!existing) { merged.set(identity, { ...item, assets: [...item.assets] }); continue; }
     if (!existing.releaseDate) existing.releaseDate = item.releaseDate;
     existing.assets = [...new Map([...existing.assets, ...item.assets].map(a => [a.url, a])).values()];
   }
   return [...merged.values()].sort((a, b) => compareVersions(b.version, a.version));
 }
 
-export interface ParsedPage { releases: ToolRelease[]; next: string[] }
+export interface ParsedPage { releases: ToolRelease[]; next: string[]; metadata?: { ltsFeatures?: number[] } }
 // Vendor response types are checked at the parser boundary; optional metadata stays optional.
-export function parsePage(source: ReleaseSource, body: string, url: string, schedule: Record<string, { end?: string }> = {}): ParsedPage {
+export function parsePage(source: ReleaseSource, body: string, url: string, schedule: Record<string, { end?: string }> = {}, metadata?: ParsedPage['metadata']): ParsedPage {
+  const extended = parseExtended(source, body, url, asset, metadata); if (extended) return extended;
   const result: ParsedPage = { releases: [], next: [] };
   const add = (item: ToolRelease) => result.releases.push(item);
   const data = ['git', 'postman', 'docker'].includes(source.kind) || (source.kind === 'edge' && !url.includes('edgeupdates.')) ? undefined : JSON.parse(body);
@@ -75,7 +79,7 @@ export function parsePage(source: ReleaseSource, body: string, url: string, sche
       for (const row of data) {
         if (!/^v\d+\.\d+\.\d+$/.test(row.version) || !Array.isArray(row.files)) continue;
         const item = release(row.version, url, `https://nodejs.org/download/release/${row.version}/`);
-        item.releaseDate = row.date; item.bundledNpm = row.npm;
+        item.releaseDate = row.date; item.bundledNpm = row.npm; item.isLts = !!row.lts;
         item.eolDate = schedule[`v${item.version.split('.')[0]}`]?.end;
         item.channel = item.eolDate && item.eolDate < new Date().toISOString().slice(0, 10) ? 'eol' : row.lts ? 'lts' : 'current';
         // Only create exact filenames for formats declared by the index.
@@ -103,9 +107,9 @@ export function parsePage(source: ReleaseSource, body: string, url: string, sche
     case 'github': {
       if (!Array.isArray(data)) throw new Error('GitHub releases schema changed');
       for (const row of data) {
-        if (row.draft || row.prerelease || typeof row.tag_name !== 'string') continue;
+        if (row.draft || typeof row.tag_name !== 'string') continue;
         const item = release(row.tag_name, url, row.html_url);
-        item.releaseDate = row.published_at;
+        item.releaseDate = row.published_at; item.isPrerelease = !!row.prerelease;
         item.assets = (row.assets ?? []).filter((a: any) => safeUrl(a.browser_download_url) && !/\.(?:sha\w*|txt|json|sig|asc|map)$/.test(a.name)).map((a: any) => asset(a.name, a.browser_download_url));
         if (safeUrl(row.tarball_url)) item.assets.push(asset('Source code', row.tarball_url, 'source'));
         add(item);
@@ -138,10 +142,11 @@ export function parsePage(source: ReleaseSource, body: string, url: string, sche
       break;
     }
     case 'jetbrains': {
-      if (!Array.isArray(data?.WS)) throw new Error('JetBrains schema changed');
-      for (const row of data.WS) {
-        if (row.type !== 'release') continue;
-        const item = release(row.version, url, `https://www.jetbrains.com/webstorm/download/other.html`);
+      if (!data || !Object.values(data).some(Array.isArray)) throw new Error('JetBrains schema changed');
+      for (const [product, rows] of Object.entries(data)) for (const row of rows as any[]) {
+        const productName = source.toolId === 'idea' ? 'idea' : source.toolId === 'pycharm' ? 'pycharm' : 'webstorm';
+        const item = release(row.version, url, `https://www.jetbrains.com/${productName}/download/other.html`);
+        item.build = row.build ?? ''; item.releaseTrack = `${product}:${row.type}`; item.isPrerelease = row.type !== 'release';
         item.releaseDate = row.date;
         item.assets = Object.entries(row.downloads ?? {}).filter(([name, value]) => !name.includes('thirdParty') && safeUrl((value as any).link)).map(([name, value]) => asset(name, (value as any).link));
         add(item);

@@ -25,8 +25,13 @@ import {
 
 const categoryLabels: Record<ToolCategory | 'all', string> = {
   all: '全部', runtime: '语言运行时', 'package-manager': '包管理器', framework: '框架',
-  database: '数据库', editor: '编辑器 / IDE', cli: '命令行', container: '容器', browser: '浏览器', terminal: '终端', 'api-client': '接口调试',
+  database: '数据库', editor: '编辑器 / IDE', cli: '命令行', container: '容器', browser: '浏览器', terminal: '终端', 'api-client': '接口调试', office: '办公套件', pdf: 'PDF', utility: '实用工具', communication: '沟通协作',
 };
+
+function compatibleCatalog(remote?: Catalog): Catalog {
+  if (!remote || remote.revision.localeCompare(embeddedCatalog.revision, undefined, { numeric: true }) < 0 || !remote.tools.every(t => t.historyPolicy && t.scenes)) return embeddedCatalog;
+  return remote;
+}
 
 function detectedPlatform(): Platform {
   if (typeof navigator === 'undefined') return 'windows';
@@ -52,6 +57,8 @@ export const useWizardStore = defineStore('wizard', () => {
   const targetMode = ref<'auto' | 'manual'>('auto');
   const validationMode = ref<'smart' | 'manual'>('manual');
   const search = ref('');
+  const activeScene = ref<'frontend' | 'java' | 'python' | 'office' | null>(null);
+  const showAllTools = ref(false);
   const category = ref<ToolCategory | 'all'>('all');
   const syncing = ref(false);
   const online = ref<boolean | null>(null);
@@ -75,7 +82,9 @@ export const useWizardStore = defineStore('wizard', () => {
     preferredManagers: [...preferredManagers.value],
     selections: explicitSelections.value,
   }));
-  const visibleTools = computed(() => catalog.value.tools.filter((tool) => {
+  const sceneTools = computed(() => catalog.value.tools.filter(tool => showAllTools.value || !activeScene.value || tool.scenes?.includes(activeScene.value)));
+  const visibleTemplates = computed(() => catalog.value.templates.filter(t => t.visible !== false));
+  const visibleTools = computed(() => sceneTools.value.filter((tool) => {
     const term = search.value.trim().toLocaleLowerCase();
     return (category.value === 'all' || tool.category === category.value)
       && (!term || `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(term));
@@ -97,6 +106,7 @@ export const useWizardStore = defineStore('wizard', () => {
         validationMode: validationMode.value,
         templateId: templateId.value,
         targetMode: targetMode.value,
+        activeScene: activeScene.value, showAllTools: showAllTools.value,
       },
       preferences: { syncOnLaunch: syncOnLaunch.value, diskScanConsent: diskScanConsent.value, motion: motion.value },
       activities: activities.value.slice(0, 50).map((item) => ({ ...item })),
@@ -119,21 +129,22 @@ export const useWizardStore = defineStore('wizard', () => {
   function applyTemplate(id: string) {
     const template = catalog.value.templates.find((candidate) => candidate.id === id);
     if (!template) return;
-    selected.value = Object.fromEntries(template.items.map((item) => {
+    selected.value = Object.fromEntries(template.items.flatMap((item) => {
       const tool = catalog.value.tools.find((candidate) => candidate.id === item.toolId)!;
       const version = item.versionId
         ? tool.versions.find((candidate) => candidate.id === item.versionId)
         : platformVersion(tool, platform.value, architecture.value);
-      return [tool.id, version!.id];
+      return version ? [[tool.id, version.id]] : [];
     }));
     templateId.value = template.id;
+    activeScene.value = template.scene ?? null; showAllTools.value = false; search.value = ''; category.value = 'all';
     addActivity('template-applied', 'info', `已应用“${template.name}”模板`, `${template.items.length} 项基础工具已加入当前方案。`);
   }
 
   function startBlankPlan() {
     selected.value = {};
     installationTargets.value = {};
-    templateId.value = null;
+    templateId.value = null; activeScene.value = null; showAllTools.value = false;
     search.value = '';
     category.value = 'all';
     step.value = 1;
@@ -209,7 +220,7 @@ export const useWizardStore = defineStore('wizard', () => {
       const cached = await loadCatalogCache();
       const result = await client.catalog(cached?.etag);
       if (result.catalog) {
-        catalog.value = result.catalog;
+        catalog.value = compatibleCatalog(result.catalog);
         await saveCatalogCache({ catalog: result.catalog, etag: result.etag });
       }
       online.value = true;
@@ -217,7 +228,7 @@ export const useWizardStore = defineStore('wizard', () => {
     } catch {
       online.value = false;
       const cached = await loadCatalogCache();
-      catalog.value = cached?.catalog ?? embeddedCatalog;
+      catalog.value = compatibleCatalog(cached?.catalog);
       if (shouldRecord) addActivity('catalog-sync', 'error', '工具目录同步失败', `已回退到可用目录 ${catalog.value.revision}`);
     } finally {
       syncing.value = false;
@@ -242,6 +253,8 @@ export const useWizardStore = defineStore('wizard', () => {
       validationMode.value = saved.wizard.validationMode ?? 'manual';
       templateId.value = saved.wizard.templateId ?? (Object.keys(saved.wizard.selected).length ? 'custom' : null);
       targetMode.value = saved.wizard.targetMode ?? 'manual';
+      activeScene.value = saved.wizard.activeScene ?? embeddedCatalog.templates.find(t => t.id === templateId.value)?.scene ?? null;
+      showAllTools.value = saved.wizard.showAllTools ?? false;
       syncOnLaunch.value = saved.preferences.syncOnLaunch;
       diskScanConsent.value = saved.preferences.diskScanConsent ?? false;
       motion.value = saved.preferences.motion;
@@ -253,12 +266,13 @@ export const useWizardStore = defineStore('wizard', () => {
     }
   }
 
+  watch([activeScene, showAllTools], () => { category.value = 'all'; persist(); void import('../services/history-cache').then(module => module.setHistoryScene(activeScene.value)); });
   watch([platform, architecture, selected, installationTargets, templateId, targetMode, validationMode, syncOnLaunch, diskScanConsent, motion, activities], persist, { deep: true });
 
   return {
     step, catalog, platform, architecture, selected, templateId, targetMode, search, category, syncing, online,
     initialized, syncOnLaunch, diskScanConsent, motion, activities, categoryLabels, explicitSelections,
-    plan, visibleTools, hasErrors, unreadActivities, applyTemplate, startBlankPlan,
+    plan, visibleTools, sceneTools, visibleTemplates, activeScene, showAllTools, hasErrors, unreadActivities, applyTemplate, startBlankPlan,
     toggleTool, setVersion, focusTool, recordExport, markActivityRead,
     markAllActivitiesRead, clearActivities, syncCatalog, initialize,
     validationMode, setValidationMode, recordScan,

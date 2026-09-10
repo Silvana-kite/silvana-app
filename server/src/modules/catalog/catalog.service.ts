@@ -13,7 +13,7 @@ export class CatalogService {
     return this.catalog.tools.filter((tool) => {
       const matchesQuery = !normalized || `${tool.name} ${tool.description}`.toLocaleLowerCase().includes(normalized);
       const matchesCategory = !category || tool.category === category;
-      const matchesPlatform = !platform || tool.recipes.some((recipe) => recipe.platform === platform);
+      const matchesPlatform = !platform || (tool.supportedPlatforms?.some(p => p === platform) ?? tool.recipes.some((recipe) => recipe.platform === platform));
       return matchesQuery && matchesCategory && matchesPlatform;
     });
   }
@@ -23,7 +23,7 @@ export class CatalogService {
   }
 
   recommend(scenario: string) {
-    const template = this.catalog.templates.find((candidate) => candidate.scenario === scenario)
+    const template = this.catalog.templates.find((candidate) => candidate.visible !== false && (candidate.scene === scenario || candidate.id === scenario || candidate.scenario === scenario))
       ?? this.catalog.templates.find((candidate) => candidate.id === 'custom');
     return { template, catalogRevision: this.catalog.revision };
   }

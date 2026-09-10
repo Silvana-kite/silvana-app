@@ -1,3 +1,5 @@
+import { vi as mockVi } from 'vitest';
+mockVi.mock('./history-cache', () => ({ loadHistoryPage: mockVi.fn(async () => undefined) }));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const payload = { toolId: 'node', items: [{ version: '12.22.12', originalVersion: 'v12.22.12', channel: 'eol', pageUrl: 'https://nodejs.org/download/release/v12.22.12/', sourceUrl: 'https://nodejs.org/dist/index.json', assets: [] }], total: 1, page: 1, pageSize: 50, revision: 'snapshot-1', updatedAt: '2026-09-09T00:00:00Z', status: 'ready' };
 beforeEach(() => { vi.resetModules(); localStorage.clear(); vi.stubEnv('VITE_API_URL', 'http://catalog.test/v1'); });

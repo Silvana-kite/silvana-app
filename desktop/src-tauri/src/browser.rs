@@ -1,3 +1,7 @@
+use std::sync::{LazyLock, Mutex};
+use std::collections::HashMap;
+static DOWNLOAD_TARGETS: LazyLock<Mutex<HashMap<std::path::PathBuf, std::path::PathBuf>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static EXPECTED_HASHES: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 use serde::{Deserialize, Serialize};
 use tauri::{webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, WebviewBuilder}, Emitter, LogicalPosition, LogicalSize, Manager, Url, Webview, WebviewUrl};
 
@@ -27,6 +31,8 @@ fn https(value: &str) -> Result<Url, String> {
     if url.scheme() != "https" || url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {
         return Err("Only HTTPS websites are supported".into());
     }
+    let catalog: serde_json::Value = serde_json::from_str(include_str!(concat!(env!("OUT_DIR"), "/catalog.json"))).map_err(|_| "Invalid official hosts")?;
+    if !catalog["officialHosts"].as_array().is_some_and(|hosts| hosts.iter().any(|host| host.as_str() == url.host_str())) { return Err("此域名未登记为官方来源".into()); }
     Ok(url)
 }
 #[derive(Deserialize)]
@@ -49,9 +55,11 @@ impl Bounds {
 }
 
 #[tauri::command]
-pub async fn browser_open(caller: Webview, url: String, bounds: Bounds) -> Result<(), String> {
+pub async fn browser_open(caller: Webview, url: String, bounds: Bounds, expected_sha256: Option<String>) -> Result<(), String> {
     authorize(&caller)?; bounds.validate(&caller)?;
-    let url = https(&url)?; let app = caller.app_handle().clone();
+    let url = https(&url)?;
+    if let Some(hash) = expected_sha256 { if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) { return Err("无效摘要".into()); } EXPECTED_HASHES.lock().map_err(|_| "摘要锁不可用")?.insert(url.to_string(), hash); }
+    let app = caller.app_handle().clone();
     if let Some(view) = app.get_webview(BROWSER) {
         bounds.apply(&view)?;
         view.show().map_err(|e| e.to_string())?;
@@ -86,13 +94,32 @@ pub async fn browser_open(caller: Webview, url: String, bounds: Bounds) -> Resul
                 if https(url.as_str()).is_err() { return false; }
                 let suggested = destination.file_name().and_then(|s| s.to_str()).unwrap_or("download");
                 if let Some(path) = rfd::FileDialog::new().set_title("保存官方下载文件").set_file_name(suggested).save_file() {
-                    *destination = path;
-                    notify(view.app_handle(), "download", format!("正在下载：{}", destination.display()));
+                    if path.exists() { notify(view.app_handle(), "error", "目标文件已存在，请选择新文件名"); return false; }
+                    let temporary = path.with_file_name(format!("{}.siilvana-download", path.file_name().unwrap_or_default().to_string_lossy()));
+                    if temporary.exists() { notify(view.app_handle(), "error", "下载暂存文件已存在，请选择新文件名"); return false; }
+                    if let Ok(mut targets) = DOWNLOAD_TARGETS.lock() { targets.insert(temporary.clone(), path); } else { return false; }
+                    *destination = temporary;
+                    notify(view.app_handle(), "download", format!("正在下载：{}", destination.file_name().unwrap_or_default().to_string_lossy()));
                     true
                 } else { notify(view.app_handle(), "download", "已取消下载"); false }
             }
-            DownloadEvent::Finished { path, success, .. } => {
-                notify(view.app_handle(), "download", if success { format!("下载完成：{}", path.map(|p| p.display().to_string()).unwrap_or_default()) } else { "下载失败，请重试".into() });
+            DownloadEvent::Finished { url, path, success, .. } => {
+                if success {
+                    if let Some(path) = path { let expected = EXPECTED_HASHES.lock().ok().and_then(|mut hashes| hashes.remove(url.as_str())); let app = view.app_handle().clone();
+                        tauri::async_runtime::spawn_blocking(move || {
+                            let checked = crate::download_check::verify_file(&path, expected.as_deref());
+                            match checked { Ok(status) => {
+                                let target = DOWNLOAD_TARGETS.lock().ok().and_then(|mut targets| targets.remove(&path));
+                                if let Some(target) = target { if target.exists() || std::fs::rename(&path, &target).is_err() { notify(&app, "error", "校验完成，但无法保存到目标；暂存文件已保留"); } else { notify(&app, "download", format!("下载完成 · {status}")); } }
+                                else { notify(&app, "error", "无法确认下载目标，暂存文件已保留"); }
+                            }, Err(error) => {
+                                let quarantine = path.with_extension("siilvana-quarantine");
+                                if !quarantine.exists() && std::fs::rename(&path, &quarantine).is_ok() { notify(&app, "error", format!("{error}；文件已隔离")); }
+                                else { notify(&app, "error", format!("{error}；隔离未完成，请勿打开文件")); }
+                            } }
+                        });
+                    }
+                } else { notify(view.app_handle(), "download", "下载失败，请重试"); }
                 true
             }
             _ => false,

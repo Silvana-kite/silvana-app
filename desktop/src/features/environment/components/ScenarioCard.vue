@@ -14,6 +14,7 @@ const presentation: Record<EnvironmentTemplate['scenario'], { icon: Component; t
   fullstack: { icon: Layers3, tone: 'blue' },
   mobile: { icon: Smartphone, tone: 'rose' },
   'data-science': { icon: ChartNoAxesCombined, tone: 'amber' },
+  office: { icon: Layers3, tone: 'blue' },
   custom: { icon: SlidersHorizontal, tone: 'cyan' },
 };
 </script>

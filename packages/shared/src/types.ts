@@ -10,7 +10,8 @@ export type ToolCategory =
   | 'container'
   | 'browser'
   | 'terminal'
-  | 'api-client';
+  | 'api-client'
+  | 'office' | 'pdf' | 'utility' | 'communication';
 export type PackageManager = 'winget' | 'scoop' | 'choco' | 'brew' | 'apt' | 'volta' | 'npm' | 'official';
 
 export interface ToolVersion {
@@ -51,6 +52,8 @@ export interface Tool {
   diskMb: number;
   versions: ToolVersion[];
   recipes: InstallRecipe[];
+  scenes?: Array<'frontend' | 'java' | 'python' | 'office'>;
+  historyPolicy?: 'history' | 'latest-only';
 }
 
 export interface DependencyRule {
@@ -65,8 +68,13 @@ export interface ReleaseAsset {
   url: string;
   name: string;
   kind: 'binary' | 'source';
-  platform?: Platform;
-  architecture?: Architecture | 'x86' | 'universal';
+  /** Vendor identifiers are retained even when this application cannot install on them. */
+  platform?: string;
+  architecture?: string;
+  sha256?: string;
+  downloadStatus?: 'unknown' | 'available' | 'unavailable';
+  yanked?: boolean;
+  yankedReason?: string;
 }
 export interface ToolRelease {
   version: string;
@@ -78,8 +86,17 @@ export interface ToolRelease {
   pageUrl: string;
   sourceUrl: string;
   assets: ReleaseAsset[];
+  build?: string;
+  releaseTrack?: string;
+  isPrerelease?: boolean;
+  isLts?: boolean;
+  lifecycleKnown?: boolean;
+  withdrawn?: boolean;
+  withdrawnReason?: string;
 }
 export interface ToolReleasePage {
+  quality?: import('./history.js').HistoryQuality;
+  notice?: string;
   toolId: string;
   items: ToolRelease[];
   total: number;
@@ -104,7 +121,9 @@ export interface EnvironmentTemplate {
   id: string;
   name: string;
   description: string;
-  scenario: 'frontend' | 'backend' | 'fullstack' | 'mobile' | 'data-science' | 'custom';
+  scenario: 'frontend' | 'backend' | 'fullstack' | 'mobile' | 'data-science' | 'custom' | 'office';
+  visible?: boolean;
+  scene?: 'frontend' | 'java' | 'python' | 'office';
   items: Array<{ toolId: string; versionId?: string }>;
 }
 

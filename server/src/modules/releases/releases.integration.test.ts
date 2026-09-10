@@ -1,3 +1,5 @@
+import { generateKeyPairSync } from 'node:crypto';
+import { HistoryService } from './history.service.js';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -17,7 +19,7 @@ describe.skipIf(!connectionString)('release history with PostgreSQL', () => {
     pool = new Pool({ connectionString, max: 5 });
     repository = new ReleaseRepository(drizzle(pool, { schema })); http = new SourceHttp(repository); service = new ReleasesService(repository, http);
   });
-  beforeEach(async () => { await pool.query('TRUNCATE release_history,release_sources,release_page_cache,sync_runs'); });
+  beforeEach(async () => { await pool.query('TRUNCATE history_assets,history_releases,history_snapshots,history_manifests,history_blobs,history_reports,history_alerts,release_history,release_sources,release_page_cache,sync_runs'); });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
   afterAll(async () => { await pool?.end(); });
   function mockSource() {
@@ -116,4 +118,28 @@ describe.skipIf(!connectionString)('release history with PostgreSQL', () => {
     expect((await service.list('fnm', {})).items[0]?.version).toBe('1.0.0');
     expect((await service.list('node', {})).items).toEqual([]);
   });
+  it('publishes immutable per-tool revisions and preserves them on collection failure', async () => {
+    const pair = generateKeyPairSync('ed25519');
+    vi.stubEnv('HISTORY_SIGNING_KEY', pair.privateKey.export({ format: 'pem', type: 'pkcs8' }).toString());
+    vi.stubEnv('HISTORY_SIGNING_KEY_ID', 'test'); vi.stubEnv('HISTORY_DATASET_ID', 'integration-only');
+    try {
+      const history = new HistoryService(drizzle(pool, { schema })); mockSource(); await service.sync(['node']);
+      const first = await history.publish(); const node = first.tools.find(t => t.toolId === 'node')!;
+      expect(node.toolRevision).toBe('1'); expect(node.count).toBe(1);
+      const descriptor = await history.snapshot('node', '1'); expect(descriptor.count).toBe(1);
+      expect((await history.publish()).manifestRevision).toBe(first.manifestRevision);
+      await pool.query("UPDATE release_sources SET status='failed',error='offline' WHERE tool_id='node'");
+      const failed = await history.publish(); expect(failed.tools.find(t => t.toolId === 'node')?.toolRevision).toBe('1');
+      expect(failed.tools.find(t => t.toolId === 'node')?.quality.sourceStatus).toBe('failed');
+      expect(await history.snapshot('node','1')).toEqual(descriptor);
+      await expect(history.snapshot('node','999')).rejects.toThrow();
+      for (let i=0;i<12;i++) {
+        await pool.query("UPDATE history_releases SET payload=jsonb_set(payload,'{bundledNpm}',to_jsonb($1::text)) WHERE tool_id='node'", [`6.14.${i}`]);
+        await history.publish();
+      }
+      expect((await history.snapshot('node')).toolRevision).toBe('13');
+      expect(BigInt((await history.manifest()).manifestRevision)).toBeGreaterThan(12n);
+    } finally { vi.unstubAllEnvs(); }
+  }, 30000);
+
 });

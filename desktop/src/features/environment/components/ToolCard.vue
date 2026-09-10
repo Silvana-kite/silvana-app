@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { latestDownload } from '@siilvana/catalog';
 import { computed, ref, type Component } from 'vue';
 import {
   Boxes, Braces, Check, ChevronDown, Code2, Coffee, Container, Database,
@@ -19,10 +20,11 @@ const icons: Record<string, Component> = {
 };
 const tones = {
   runtime: 'cyan', 'package-manager': 'violet', framework: 'blue', database: 'blue',
-  editor: 'rose', cli: 'amber', container: 'cyan', browser: 'blue', terminal: 'amber', 'api-client': 'violet',
+  editor: 'rose', cli: 'amber', container: 'cyan', browser: 'blue', terminal: 'amber', 'api-client': 'violet', office: 'blue', pdf: 'rose', utility: 'amber', communication: 'cyan',
 } as const;
 const displayedVersion = computed(() => props.versionId ?? (props.platform && props.architecture ? platformVersion(props.tool, props.platform, props.architecture)?.id : props.tool.versions.find((version) => version.recommended)?.id ?? props.tool.versions[0]?.id));
 const versions = computed(() => props.tool.versions.filter(version => !props.platform || !props.tool.recipes.length || version.id === props.versionId || props.tool.recipes.some(recipe => recipe.versionId === version.id && recipe.platform === props.platform && (recipe.architecture === 'any' || recipe.architecture === props.architecture))));
+const latest = computed(() => latestDownload(props.tool, props.platform ?? 'windows', props.architecture ?? 'x64'));
 const panelOpen = ref(false);
 const canInstall = computed(() => props.tool.recipes.some(r => r.approved && (!props.platform || r.platform === props.platform) && (!props.architecture || r.architecture === 'any' || r.architecture === props.architecture)));
 const versionLabel = computed(() => versions.value.find(v => v.id === displayedVersion.value)?.version ?? '查看历史版本');
@@ -34,6 +36,7 @@ const versionLabel = computed(() => versions.value.find(v => v.id === displayedV
       <div class="tool-card__top">
         <IconTile :icon="icons[tool.icon] ?? Wrench" :tone="tones[tool.category]" />
         <button
+          v-if="tool.historyPolicy !== 'latest-only'"
           type="button"
           :class="['check-button', { 'is-selected': selected }]"
           :aria-label="`${selected ? '取消选择' : '选择'} ${tool.name}`"
@@ -49,7 +52,7 @@ const versionLabel = computed(() => versions.value.find(v => v.id === displayedV
       <h2><a :href="tool.downloadUrl ?? tool.homepage" @click.prevent="openOfficialUrl(tool.downloadUrl ?? tool.homepage)">{{ tool.name }} <small>↗</small></a></h2>
       <p>{{ tool.description }}</p>
 
-      <div class="tool-card__version">
+      <div v-if="tool.historyPolicy !== 'latest-only'" class="tool-card__version">
         <span>版本</span>
         <span class="select-control">
           <button
@@ -65,6 +68,7 @@ const versionLabel = computed(() => versions.value.find(v => v.id === displayedV
           <ChevronDown :size="15" />
         </span>
       </div>
+      <button v-if="tool.historyPolicy === 'latest-only'" class="tool-version-trigger" type="button" :title="latest.note" @click="openOfficialUrl(latest.url)">下载最新版 ↗</button>
       <small v-if="!canInstall" class="tool-manual-label">{{ tool.supportedPlatforms && platform && !tool.supportedPlatforms.includes(platform) ? '适用于其他系统 · 可查看官网' : tool.id === 'npm' ? '随 Node.js 提供' : '官网下载 · 手动安装' }}</small>
     </div>
   </article>

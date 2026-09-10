@@ -18,7 +18,8 @@ describe('official release parsers', () => {
     const tag = id === 'github-desktop' ? 'release-3.6.5' : id === 'bun' ? 'bun-v3.6.5' : 'v3.6.5';
     const release = { tag_name: tag, html_url: `https://github.com/${source(id).repository}/releases/tag/${tag}`, published_at: '2026-01-01', assets: [{ name: 'app-windows-arm64.zip', browser_download_url: 'https://github.com/vendor/app/releases/download/v3.6.5/app.zip' }] };
     const result = mergeReleases(parse(id, [release, { ...release, tag_name: 'v4.0.0-rc.1', prerelease: true }, { ...release, tag_name: 'v5.0.0', draft: true }]).releases);
-    expect(result.map(r => r.version)).toEqual(['3.6.5']);
+    expect(result.filter(r => !r.isPrerelease).map(r => r.version)).toEqual(['3.6.5']);
+    expect(result.find(r => r.version === '4.0.0-rc.1')?.isPrerelease).toBe(true);
     expect(result[0].assets[0]).toMatchObject({ platform: 'windows', architecture: 'arm64' });
   });
   it('normalizes VS Code tags independently of upstream ordering', () => {
@@ -52,9 +53,13 @@ describe('official release parsers', () => {
     expect(result.releases[0]).toMatchObject({ version: '12.27.2', assets: [] });
   });
   it('extracts Docker version sections, not versions mentioned in dependency notes', () => {
-    const result = parse('docker', '<h2 id="4500">4.50.0</h2><p>Uses dependency 9.1.2</p><a href="https://desktop.docker.com/win/main/amd64/123/Docker.exe">Windows</a>');
+    const result = parsePage({ ...source('docker'), kind: 'docker' }, '<h2 id="4500">4.50.0</h2><p>Uses dependency 9.1.2</p><a href="https://desktop.docker.com/win/main/amd64/123/Docker.exe">Windows</a>', 'https://docs.docker.com/desktop/release-notes/');
     expect(result.releases.map(r => r.version)).toEqual(['4.50.0']);
     expect(result.releases[0].assets[0].url).toContain('Docker.exe');
+  });
+  it('reads Docker official Markdown headings without extracting dependency versions', () => {
+    const result = parse('docker', '## 4.90.0\nUses dependency 9.1.2\n## 4.89.0\nPrevious release');
+    expect(result.releases.map(r => r.version)).toEqual(['4.90.0','4.89.0']);
   });
   it('fails closed on malformed indexes and removes executable URLs', () => {
     expect(() => parse('node', { message: 'rate limited' })).toThrow();

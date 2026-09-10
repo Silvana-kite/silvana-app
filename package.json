@@ -11,15 +11,19 @@
     "npm": "11.19.0"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "scripts": {
     "build": "pnpm -r build",
-    "dev": "pnpm --filter @siilvana/shared build && pnpm --filter @siilvana/catalog build && pnpm --parallel --filter @siilvana/server --filter @siilvana/desktop dev",
+    "dev": "node tools/dev.mjs",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "catalog:validate": "pnpm --filter @siilvana/shared build && pnpm --filter @siilvana/catalog validate",
-    "check": "pnpm catalog:validate && pnpm typecheck && pnpm test && pnpm build"
+    "check": "pnpm catalog:validate && pnpm typecheck && pnpm test && pnpm build",
+    "history:validate": "node tools/catalog/validate-snapshots.mjs",
+    "dev:web": "node tools/dev.mjs --web"
   },
   "devDependencies": {
     "typescript": "^5.9.2",

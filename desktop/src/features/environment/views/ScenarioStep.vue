@@ -16,14 +16,7 @@ const detectedTarget = computed(() => wizard.platform === environment.device.pla
 const verifiedDisk = computed(() => environment.validScan && detectedTarget.value && environment.installDisks.length > 0);
 const enough = computed(() => wizard.hasInstallationTargets ? environment.wizardCanContinue() : verifiedDisk.value && environment.installDisks.every(d => d.availableBytes >= requiredBytes(wizard.plan.estimatedDiskMb)));
 const diskLabel = computed(() => !isDesktop() ? '磁盘空间未验证' : !detectedTarget.value ? '目标预览' : environment.status === 'scanning' ? '正在检测磁盘' : verifiedDisk.value ? enough.value ? '磁盘空间充足' : '磁盘空间不足' : '磁盘空间待检测');
-const counts = computed(() => Object.fromEntries(wizard.catalog.templates.map(template => {
-  const selections = template.items.flatMap(item => {
-    const tool = wizard.catalog.tools.find(t => t.id === item.toolId);
-    const version = tool?.versions.find(v => v.id === item.versionId) ?? (tool && platformVersion(tool, wizard.platform, wizard.architecture));
-    return version ? [{ toolId: item.toolId, versionId: version.id }] : [];
-  });
-  return [template.id, createInstallPlan(wizard.catalog, { platform: wizard.platform, architecture: wizard.architecture, preferredManagers: [], selections }).selections.length];
-})));
+const counts = computed(() => Object.fromEntries(wizard.visibleTemplates.map(t => [t.id, wizard.catalog.tools.filter(tool => !t.scene || tool.scenes?.includes(t.scene)).length])));
 
 function automatic() {
   wizard.targetMode = 'auto';
@@ -71,7 +64,7 @@ onMounted(async () => {
 
 <template>
   <section class="setup-section setup-section--wide scenario-step">
-    <header class="setup-heading"><span class="page-kicker">01 / 开发场景</span><h1>选择开发场景</h1></header>
+    <header class="setup-heading"><span class="page-kicker">01 / 使用场景</span><h1>选择使用场景</h1></header>
     <div class="device-strip" aria-live="polite">
       <button class="device-target" type="button" :aria-expanded="expanded" aria-controls="target-settings" @click="expanded = !expanded">
         <Monitor :size="18" /><span><small>目标系统</small><strong>{{ wizard.targetMode === 'auto' && detectedTarget ? environment.device.osName || platformNames[wizard.platform] : platformNames[wizard.platform] }}</strong></span>
@@ -87,10 +80,10 @@ onMounted(async () => {
       <label>处理器<select v-model="wizard.architecture" @change="manual"><option value="x64">x64</option><option value="arm64">ARM64</option></select></label>
       <button class="text-button" type="button" @click="automatic"><RotateCcw :size="14" />自动识别</button>
     </div>
-    <div class="scenario-grid" role="radiogroup" aria-label="开发场景" @keydown="moveSelection">
-      <ScenarioCard v-for="template in wizard.catalog.templates" :key="template.id" :template="template" :selected="wizard.templateId === template.id" :count="counts[template.id]" @select="wizard.applyTemplate(template.id)" />
+    <div class="scenario-grid" role="radiogroup" aria-label="使用场景" @keydown="moveSelection">
+      <ScenarioCard v-for="template in wizard.visibleTemplates" :key="template.id" :template="template" :selected="template.scene ? wizard.activeScene === template.scene : !wizard.activeScene && wizard.templateId === template.id" :count="counts[template.id]" @select="wizard.applyTemplate(template.id)" />
     </div>
-    <div class="scenario-meta"><span>{{ wizard.catalog.templates.length }} 个开发场景</span><span>目录 {{ wizard.catalog.revision }}</span></div>
+    <div class="scenario-meta"><span>{{ wizard.visibleTemplates.length }} 个使用场景</span><span>目录 {{ wizard.catalog.revision }}</span></div>
     <ScanPermissionDialog v-if="environment.status === 'permission'" @allow="scan" @deny="environment.deny" />
   </section>
 </template>

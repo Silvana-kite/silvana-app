@@ -6,6 +6,7 @@ import {
   Settings, SlidersHorizontal, WifiOff,
 } from 'lucide-vue-next';
 import GlobalSearch from '../shared/components/GlobalSearch.vue';
+import OfflineHistoryStatus from '../shared/components/OfflineHistoryStatus.vue';
 import OfficialBrowser from '../shared/components/OfficialBrowser.vue';
 import { portals } from './config/portals';
 import { useWizardStore } from '../features/environment/stores/wizard';
@@ -112,6 +113,7 @@ onMounted(() => void store.initialize());
         </div>
       </header>
 
+      <OfflineHistoryStatus />
       <main class="app-content">
         <RouterView />
       </main>

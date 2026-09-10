@@ -10,7 +10,7 @@ describe('CatalogService', () => {
   });
 
   it('filters tools by platform and category', () => {
-    expect(service.listTools(undefined, 'editor', 'linux').map(tool => tool.id)).toEqual(['vscode']);
+    expect(service.listTools(undefined, 'editor', 'linux').map(tool => tool.id)).toEqual(['vscode', 'webstorm', 'idea', 'pycharm']);
     expect(service.listTools('volta', undefined, 'linux').map((tool) => tool.id)).toEqual(['volta']);
   });
 

@@ -1,4 +1,4 @@
-import { catalog } from '../../packages/catalog/src/index.ts';
+import { catalog, officialHosts } from '../../packages/catalog/src/index.ts';
 
 // Build output is embedded in Rust. Remote catalog data never grants execution rights.
 const tools = catalog.tools.map(tool => ({
@@ -11,4 +11,4 @@ const tools = catalog.tools.map(tool => ({
     return { ...version, acceptedRange: version.acceptedRange ?? range };
   }),
 }));
-process.stdout.write(JSON.stringify({ ...catalog, tools }));
+process.stdout.write(JSON.stringify({ ...catalog, tools, officialHosts: [...officialHosts].sort() }));

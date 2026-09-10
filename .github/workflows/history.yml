@@ -1,0 +1,94 @@
+name: History collection and supply chain checks
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '25 3 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: history-publisher
+  cancel-in-progress: false
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.HISTORY_DATABASE_URL }}
+      HISTORY_DATASET_ID: ${{ vars.HISTORY_DATASET_ID }}
+      HISTORY_SIGNING_KEY_ID: ${{ vars.HISTORY_SIGNING_KEY_ID }}
+      HISTORY_SIGNING_KEY: ${{ secrets.HISTORY_SIGNING_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      OPS_ALERT_WEBHOOK: ${{ secrets.OPS_ALERT_WEBHOOK }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @siilvana/shared build && pnpm --filter @siilvana/catalog build && pnpm --filter @siilvana/server build
+      - name: Check publication configuration
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$HISTORY_SIGNING_KEY" ] || [ -z "$HISTORY_DATASET_ID" ] || [ -z "$HISTORY_SIGNING_KEY_ID" ]; then
+            echo 'History publication is not configured. No complete-coverage claim can be made.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - run: pnpm --filter @siilvana/server db:migrate
+      - name: Collect official records
+        id: collect
+        continue-on-error: true
+        run: |
+          mkdir -p artifacts/history
+          set -o pipefail
+          pnpm --filter @siilvana/server catalog:sync --all | tee artifacts/history/collection.json
+      - run: pnpm --filter @siilvana/server history:export && pnpm history:validate
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: signed-history-and-report
+          path: |
+            desktop/public/history
+            history-snapshot.lock.json
+            desktop/src/features/environment/services/history-trust.ts
+            artifacts/history
+          retention-days: 90
+      - name: Report incomplete collection
+        if: steps.collect.outcome != 'success'
+        run: |
+          echo 'Collection is partial. Inspect the per-source report; old signed snapshots remain available.' >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+  supply-chain:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Dependency audit and SBOM
+        run: |
+          mkdir -p artifacts/supply-chain
+          pnpm audit --json > artifacts/supply-chain/dependency-audit.json || true
+          node tools/catalog/sbom.mjs
+      - name: Scan distributable web assets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clamav
+          sudo systemctl stop clamav-freshclam || true
+          sudo freshclam
+          clamscan --recursive desktop/dist > artifacts/supply-chain/antivirus.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: supply-chain-reports
+          path: artifacts/supply-chain
+          retention-days: 90

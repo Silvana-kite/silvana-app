@@ -1,4 +1,6 @@
+import { vendorHosts } from './official-hosts.ts';
 import type { Catalog, InstallRecipe, Platform, Tool } from '@siilvana/shared';
+import { sceneSoftware, withScene } from './scenes.ts';
 import { additionalSoftware, officialDownloads } from './software.ts';
 
 const verify = (executable: string, ...args: string[]) => ({ executable, args });
@@ -132,9 +134,9 @@ const tools: Tool[] = [
 
 export const catalog: Catalog = {
   schemaVersion: 1,
-  revision: '2026-09-09.2',
-  generatedAt: '2026-09-06T00:00:00Z',
-  tools: [...tools.map(tool => ({ ...tool, downloadUrl: officialDownloads[tool.id] })), ...additionalSoftware],
+  revision: '2026-09-10.3',
+  generatedAt: '2026-09-10T00:00:00Z',
+  tools: [...tools.map(tool => ({ ...tool, downloadUrl: officialDownloads[tool.id] })), ...additionalSoftware].map(withScene).concat(sceneSoftware),
   dependencies: [
     { sourceToolId: 'node', targetToolId: 'volta', kind: 'requires' },
     { sourceToolId: 'pnpm', targetToolId: 'node', kind: 'requires', targetRange: '>=18' },
@@ -146,14 +148,21 @@ export const catalog: Catalog = {
     { sourceToolId: 'maven', sourceRange: '*', targetToolId: 'jdk', targetRange: '>=17', relation: 'requires', severity: 'error', message: '当前 Maven 方案需要 JDK 17 或更高版本。' },
   ],
   templates: [
-    { id: 'frontend-web', name: '前端 Web', description: 'Volta、Node LTS、pnpm、Git 与 VS Code。', scenario: 'frontend', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
-    { id: 'node-backend', name: 'Node.js 后端', description: 'Node 工具链、PostgreSQL 与 Docker。', scenario: 'backend', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
-    { id: 'java-backend', name: 'Java 后端', description: 'Temurin JDK、Maven、PostgreSQL 与 Docker。', scenario: 'backend', items: [{ toolId: 'jdk' }, { toolId: 'maven' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
-    { id: 'data-science', name: 'Python / 数据科学', description: 'Python、Git 与 VS Code 的轻量起点。', scenario: 'data-science', items: [{ toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }] },
-    { id: 'mobile-cross-platform', name: '移动开发', description: '面向跨端 JavaScript 应用的 Node 工具链。', scenario: 'mobile', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
-    { id: 'fullstack', name: '全栈开发', description: '前后端运行时、数据库与容器工具。', scenario: 'fullstack', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
+    { id: 'frontend-web', scene: 'frontend', name: '前端 Web', description: 'Volta、Node LTS、pnpm、Git 与 VS Code。', scenario: 'frontend', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
+    { id: 'node-backend', visible: false, name: 'Node.js 后端', description: 'Node 工具链、PostgreSQL 与 Docker。', scenario: 'backend', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
+    { id: 'java-backend', scene: 'java', name: 'Java', description: 'JDK、Maven、Gradle 与 Java 开发软件。', scenario: 'backend', items: [{ toolId: 'jdk' }, { toolId: 'maven' }, { toolId: 'git' }, { toolId: 'vscode' }] },
+    { id: 'data-science', scene: 'python', name: 'Python', description: 'Python、Git 与 VS Code 的轻量起点。', scenario: 'data-science', items: [{ toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }] },
+    { id: 'mobile-cross-platform', visible: false, name: '移动开发', description: '面向跨端 JavaScript 应用的 Node 工具链。', scenario: 'mobile', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
+    { id: 'fullstack', visible: false, name: '全栈开发', description: '前后端运行时、数据库与容器工具。', scenario: 'fullstack', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
+    { id: 'office', scene: 'office', name: '办公', description: '文档、PDF、压缩与团队协作软件，直接下载最新版。', scenario: 'office', items: [] },
     { id: 'custom', name: '自定义', description: '从空白清单开始选择。', scenario: 'custom', items: [] },
   ],
 };
 
 export default catalog;
+export { latestDownload } from './scenes.ts';
+
+export const officialHosts = new Set([...vendorHosts, ...catalog.tools.flatMap(t => [t.homepage, t.downloadUrl].filter((u): u is string => !!u).map(u => new URL(u).hostname))]);
+export function isOfficialUrl(value: string): boolean {
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && (!url.port || url.port === '443') && officialHosts.has(url.hostname); } catch { return false; }
+}

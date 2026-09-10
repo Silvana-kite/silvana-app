@@ -1,3 +1,4 @@
+import { loadHistoryPage } from './history-cache';
 import { Store } from '@tauri-apps/plugin-store';
 import { SiilvanaApiClient, isReleasePage } from '@siilvana/api-client';
 import type { ToolReleasePage } from '@siilvana/shared';
@@ -36,7 +37,7 @@ function persist() {
 export function releaseApiUrl() {
   return (import.meta.env.VITE_API_URL as string | undefined) ?? (import.meta.env.DEV ? 'http://localhost:3000/v1' : undefined);
 }
-export async function loadReleases(toolId: string, query: { q?: string; page?: number; platform?: string; architecture?: string }, refresh = false) {
+async function loadLegacyReleases(toolId: string, query: { q?: string; page?: number; platform?: string; architecture?: string }, refresh = false) {
   initialized ??= initialize(); await initialized;
   const base = releaseApiUrl();
   const key = JSON.stringify([base, toolId, query]);
@@ -59,4 +60,8 @@ export async function loadReleases(toolId: string, query: { q?: string; page?: n
     finally { pending.delete(key); }
   })();
   pending.set(key, work); return work;
+}
+
+export async function loadReleases(toolId: string, query: { q?: string; page?: number; platform?: string; architecture?: string; includePrerelease?: boolean }, refresh = false) {
+  return await loadHistoryPage(toolId, query, refresh) ?? loadLegacyReleases(toolId, query, refresh);
 }

@@ -21,11 +21,11 @@ export class ReleasesService {
     const row = result.rows[0] as (SourceState & { items: ToolRelease[] }) | undefined;
     if (!row) return empty;
     const needle = query.q?.trim().toLowerCase() ?? '';
-    let items = row.items.filter(item => item.version.toLowerCase().includes(needle));
+    let items = row.items.filter(item => !item.isPrerelease && item.version.toLowerCase().includes(needle));
     if (query.platform) items = items.filter(item => !item.assets.length || item.assets.some(a => !a.platform || (a.platform === query.platform && (!query.architecture || !a.architecture || a.architecture === 'universal' || a.architecture === query.architecture))));
     items.sort((a, b) => compareVersions(b.version, a.version));
     const status = row.updated_at ? (row.status === 'failed' || Date.now() - new Date(row.updated_at).getTime() > 2 * 86400000 ? 'stale' : 'ready') : row.status === 'failed' ? 'unavailable' : 'pending';
-    return { ...empty, items: items.slice((page - 1) * pageSize, page * pageSize), total: items.length, revision: row.revision, updatedAt: row.updated_at?.toISOString() ?? null, status };
+    return { ...empty, items: items.slice((page - 1) * pageSize, page * pageSize).map(item => ({ ...item, assets: item.assets.map(asset => ({ ...asset, platform: asset.platform && ['windows','macos','linux'].includes(asset.platform) ? asset.platform : undefined, architecture: asset.architecture && ['x64','arm64','x86','universal'].includes(asset.architecture) ? asset.architecture : undefined })) })), total: items.length, revision: row.revision, updatedAt: row.updated_at?.toISOString() ?? null, status };
   }
   async sync(toolIds?: string[], options: { force?: boolean; budgetMs?: number } = {}) {
     const chosen = toolIds?.length ? sources.filter(s => toolIds.includes(s.toolId)) : sources;
@@ -53,6 +53,7 @@ export class ReleasesService {
     } finally { try { await lock.query('SELECT pg_advisory_unlock(2026090923)'); } finally { lock.release(); } }
   }
   private async syncSource(source: ReleaseSource, deadline: number, force?: boolean) {
+    const startedAt = new Date();
     const toolId = source.toolId; const token = await this.repository.claim(toolId, force);
     if (!token) {
       const state = await this.repository.state(toolId);
@@ -60,12 +61,19 @@ export class ReleasesService {
     }
     try {
       const state = await this.repository.state(toolId);
-      const checkpoint: Checkpoint = state?.checkpoint?.parserVersion === PARSER_VERSION ? state.checkpoint : { parserVersion: PARSER_VERSION, queue: [...source.urls], visited: [], releases: [] };
-      const schedule = source.kind === 'node' ? JSON.parse((await this.http.read(NODE_SCHEDULE)).body) : {};
+      const sourceFingerprint = JSON.stringify([source.kind, source.urls]);
+      const checkpoint: Checkpoint = state?.checkpoint?.parserVersion === PARSER_VERSION && (!state.checkpoint.sourceFingerprint || state.checkpoint.sourceFingerprint === sourceFingerprint) && (state.checkpoint.queue.length || state.checkpoint.releases.length) ? state.checkpoint : { parserVersion: PARSER_VERSION, sourceFingerprint, queue: [...source.urls], visited: [], releases: [] };
+      let schedule: Record<string, { end?: string }> = {};
+      if (source.kind === 'node') {
+        try { schedule = JSON.parse((await this.http.read(NODE_SCHEDULE)).body); }
+        catch { const cached = await this.repository.cache(NODE_SCHEDULE); if (cached) schedule = JSON.parse(cached.body);
+          await this.repository.pool.query('INSERT INTO history_reports(tool_id,status,payload) VALUES($1,$2,$3)', [toolId, 'metadata-unavailable', JSON.stringify({ field: 'eolDate', reason: 'Lifecycle schedule unavailable; release index remains authoritative' })]); }
+      }
       while (checkpoint.queue.length && Date.now() < deadline) {
         const url = checkpoint.queue[0];
         const page = await this.http.read(url);
-        const parsed = parsePage(source, page.body, url, schedule);
+        const parsed = parsePage(source, page.body, url, schedule, checkpoint.metadata);
+        if (parsed.metadata) checkpoint.metadata = { ...checkpoint.metadata, ...parsed.metadata };
         checkpoint.queue.shift(); checkpoint.visited.push(url);
         checkpoint.releases = mergeReleases([...checkpoint.releases, ...parsed.releases]);
         for (const next of [...parsed.next, ...(page.next_url ? [page.next_url] : [])]) {
@@ -73,15 +81,15 @@ export class ReleasesService {
         }
         await this.repository.checkpoint(toolId, token, checkpoint);
       }
-      if (checkpoint.queue.length) { await this.repository.pause(toolId, token); return { toolId, status: 'pending', count: checkpoint.releases.length }; }
+      if (checkpoint.queue.length) { await this.repository.pause(toolId, token); await this.repository.log(toolId, 'pending', checkpoint.releases.length, undefined, startedAt); return { toolId, status: 'pending', count: checkpoint.releases.length }; }
       if (!checkpoint.releases.length) throw new Error('Source returned no recognized stable releases; publication cancelled');
       await this.repository.publish(toolId, token, checkpoint.releases);
-      await this.repository.log(toolId, 'success', checkpoint.releases.length);
+      await this.repository.log(toolId, 'success', checkpoint.releases.length, undefined, startedAt);
       return { toolId, status: 'ready', count: checkpoint.releases.length };
     } catch (error) {
       const message = error instanceof Error ? `${error.message}${error.cause instanceof Error ? `: ${error.cause.message}` : ''}` : 'Unknown source error';
       await this.repository.fail(toolId, token, message, error instanceof SourceHttpError ? error.retryMs : undefined);
-      await this.repository.log(toolId, 'failed', 0, message);
+      await this.repository.log(toolId, 'failed', 0, message, startedAt);
       return { toolId, status: 'failed', error: message };
     }
   }

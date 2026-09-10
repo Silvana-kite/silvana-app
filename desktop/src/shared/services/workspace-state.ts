@@ -24,6 +24,8 @@ export interface WorkspaceStateV1 {
     installationTargets?: Record<string, string>;
     validationMode?: 'smart' | 'manual';
     templateId?: string | null;
+    activeScene?: 'frontend' | 'java' | 'python' | 'office' | null;
+    showAllTools?: boolean;
     targetMode?: 'auto' | 'manual';
   };
   preferences: {
@@ -75,6 +77,8 @@ export function isWorkspaceState(value: unknown): value is WorkspaceStateV1 {
     && (state.wizard.validationMode === undefined || ['smart', 'manual'].includes(state.wizard.validationMode))
     && (state.wizard.templateId == null || typeof state.wizard.templateId === 'string')
     && (state.wizard.targetMode === undefined || ['auto', 'manual'].includes(state.wizard.targetMode))
+    && (state.wizard.activeScene == null || ['frontend', 'java', 'python', 'office'].includes(state.wizard.activeScene))
+    && (state.wizard.showAllTools === undefined || typeof state.wizard.showAllTools === 'boolean')
     && !!state.preferences
     && typeof state.preferences.syncOnLaunch === 'boolean'
     && (state.preferences.diskScanConsent === undefined || typeof state.preferences.diskScanConsent === 'boolean')

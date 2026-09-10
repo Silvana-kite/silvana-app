@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 2,
+  "datasetId": "siilvana-local",
+  "manifestRevision": "11",
+  "manifestHash": "eb93c38223e8e6a44a5f0bf787293385c327007c691b79c8d792f646a5e316b5",
+  "publicKey": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAhzMJJYz+TJI7zx3cuhXYoONDRmsu/BFpG3VogTqI8Gk=\n-----END PUBLIC KEY-----\n",
+  "publicKeys": {
+    "local-2026-09": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAhzMJJYz+TJI7zx3cuhXYoONDRmsu/BFpG3VogTqI8Gk=\n-----END PUBLIC KEY-----\n"
+  },
+  "keyId": "local-2026-09",
+  "compressedBytes": 3243609
+}

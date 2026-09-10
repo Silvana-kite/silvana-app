@@ -3,6 +3,9 @@ use std::{env, path::PathBuf, process::Command};
 fn main() {
     println!("cargo:rerun-if-changed=../../packages/catalog/src/index.ts");
     println!("cargo:rerun-if-changed=../../packages/catalog/src/software.ts");
+    println!("cargo:rerun-if-changed=../../packages/catalog/src/scenes.ts");
+    println!("cargo:rerun-if-changed=../../packages/catalog/native-catalog.signed.json");
+    println!("cargo:rerun-if-changed=../../packages/catalog/native-catalog.public-key");
     println!("cargo:rerun-if-changed=../../tools/catalog/native-manifest.mjs");
     let manifest = Command::new("node")
         .arg("../../tools/catalog/native-manifest.mjs")
@@ -18,6 +21,9 @@ fn main() {
         manifest.stdout,
     )
     .expect("Cannot write native catalog");
+    for name in ["native-catalog.signed.json", "native-catalog.public-key"] {
+        std::fs::copy(format!("../../packages/catalog/{name}"), PathBuf::from(env::var("OUT_DIR").unwrap()).join(name)).expect("Signed native catalog missing; run tools/catalog/sign-native.mjs");
+    }
     println!("cargo:rerun-if-changed=app-icon.svg");
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("missing manifest directory"));

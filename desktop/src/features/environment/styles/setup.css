@@ -96,3 +96,9 @@ button.device-disk { cursor: pointer; }
 @media (max-width: 370px) { .summary-thumbnails { display: none; }.setup-page .setup-actionbar { padding-inline: 14px; }.device-target { flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .setup-page .scenario-card__arrow { transition: none; transform: none !important; } }
 html[data-motion="reduced"] .setup-page .scenario-card__arrow { transition: none; transform: none !important; }
+
+/* Five visible scenarios use an adaptive layout, independent of legacy IDs. */
+.setup-page .scenario-grid { grid-template-columns: repeat(3, minmax(0,1fr)); grid-template-rows: auto; }
+.setup-page .scenario-grid .scenario-card { grid-column: auto; grid-row: auto; min-height: 210px; }
+@media(max-width:1000px){.setup-page .scenario-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.setup-page .scenario-grid{grid-template-columns:1fr}}

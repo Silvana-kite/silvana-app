@@ -1,10 +1,29 @@
 import { parseCatalog, type Catalog, type InstallPlan, type InstallPlanRequest, type ToolReleasePage } from '@siilvana/shared';
+import { isHistoryManifest, isHistorySnapshot, type HistoryManifest, type HistorySnapshot, type HistoryDiff } from '@siilvana/shared';
 
 export class SiilvanaApiClient {
   private readonly baseUrl: string;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
+  }
+
+  private async historyRequest(path: string, etag?: string, signal?: AbortSignal) {
+    const base = this.baseUrl.replace(/\/v[12]$/, '');
+    const response = await fetch(`${base}/v2/${path}`, { headers: etag ? { 'If-None-Match': etag } : {}, signal });
+    if (response.status === 304) return { unchanged: true, etag };
+    if (!response.ok) throw new Error(`History request failed: ${response.status}`);
+    return { unchanged: false, etag: response.headers.get('etag') ?? undefined, data: await response.json() as unknown };
+  }
+  async historyManifest(etag?: string, signal?: AbortSignal): Promise<{ data?: HistoryManifest; unchanged: boolean; etag?: string }> {
+    const result = await this.historyRequest('release-history/manifest', etag, signal);
+    if (!result.unchanged && !isHistoryManifest(result.data)) throw new Error('Invalid signed history manifest');
+    return { ...result, data: result.data as HistoryManifest | undefined };
+  }
+  async historySnapshot(toolId: string, revision: string, etag?: string, signal?: AbortSignal): Promise<{ data?: HistorySnapshot; unchanged: boolean; etag?: string }> {
+    const result = await this.historyRequest(`tools/${encodeURIComponent(toolId)}/history-snapshot?revision=${encodeURIComponent(revision)}`, etag, signal);
+    if (!result.unchanged && (!isHistorySnapshot(result.data) || result.data.toolId !== toolId || result.data.toolRevision !== revision)) throw new Error('Invalid signed tool snapshot');
+    return { ...result, data: result.data as HistorySnapshot | undefined };
   }
 
   async catalog(etag?: string): Promise<{ catalog?: Catalog; etag?: string; unchanged: boolean }> {
@@ -43,6 +62,6 @@ export function isReleasePage(data: any): data is ToolReleasePage {
       && ['releaseDate', 'eolDate', 'bundledNpm'].every(key => item[key] === undefined || typeof item[key] === 'string')
       && ['stable', 'lts', 'current', 'eol'].includes(item.channel) && https(item.pageUrl) && https(item.sourceUrl) && Array.isArray(item.assets)
       && item.assets.every((a: any) => typeof a.name === 'string' && https(a.url) && ['binary', 'source'].includes(a.kind)
-        && (a.platform === undefined || ['windows', 'macos', 'linux'].includes(a.platform))
-        && (a.architecture === undefined || ['x64', 'arm64', 'x86', 'universal'].includes(a.architecture))));
+        && (a.platform === undefined || typeof a.platform === 'string' && /^[a-z0-9-]{1,32}$/.test(a.platform))
+        && (a.architecture === undefined || typeof a.architecture === 'string' && /^[a-z0-9-]{1,32}$/.test(a.architecture))));
 }

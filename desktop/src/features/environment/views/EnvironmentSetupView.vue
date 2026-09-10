@@ -46,7 +46,7 @@ const exporting = ref(false);
 const exportError = ref('');
 const scanBlocked = computed(() => store.validationMode === 'smart' && !environment.wizardCanContinue());
 const exportDisabled = computed(() => store.hasInstallationTargets || store.hasErrors || scanBlocked.value || exporting.value || !store.plan.steps.length);
-const labels = computed(() => ['开发场景', '选择工具', '检查方案', isDesktop() ? '安装' : '导出']);
+const labels = computed(() => store.activeScene === 'office' && !store.plan.steps.length ? ['使用场景', '选择软件'] : ['使用场景', '选择工具', '检查方案', isDesktop() ? '安装' : '导出']);
 const nextDisabled = computed(() => installer.running || (store.hasInstallationTargets && store.step >= 2 && (scanBlocked.value || (store.step === 3 && !installer.canStart))) || (store.step === 1 ? !store.templateId && !store.plan.selections.length : !store.plan.steps.length || (store.step === 3 && store.hasErrors)));
 onBeforeRouteLeave(() => !installer.running);
 onBeforeRouteUpdate(() => !installer.running);
@@ -132,8 +132,10 @@ watch(() => route.query.tool, (value) => {
 
     <footer class="setup-actionbar">
       <button v-if="store.step > 1" class="secondary-button action-back" type="button" :disabled="installer.running" title="上一步" @click="navigate(store.step - 1)"><ArrowLeft :size="17" /><span>上一步</span></button>
-      <button ref="summaryButton" class="plan-summary-button" type="button" :aria-expanded="summaryOpen" @click="summaryOpen = true"><div class="summary-thumbnails" aria-hidden="true"><span v-for="(icon, index) in [Braces, GitBranch, Code2].slice(0, store.plan.selections.length)" :key="index" class="summary-thumbnail"><component :is="icon" :size="15" /></span></div><span><strong>{{ store.plan.selections.length }} 项工具</strong><small>{{ (store.plan.estimatedDiskMb / 1024).toFixed(1) }} GB</small></span></button>
-      <button v-if="store.step < 4" class="primary-button" type="button" :disabled="nextDisabled" @click="navigate(store.step + 1)">下一步<ArrowRight :size="17" /></button>
+      <span v-if="store.activeScene === 'office' && !store.plan.steps.length">{{ store.sceneTools.length }} 款办公软件 · 官网下载</span>
+      <button v-else ref="summaryButton" class="plan-summary-button" type="button" :aria-expanded="summaryOpen" @click="summaryOpen = true"><div class="summary-thumbnails" aria-hidden="true"><span v-for="(icon, index) in [Braces, GitBranch, Code2].slice(0, store.plan.selections.length)" :key="index" class="summary-thumbnail"><component :is="icon" :size="15" /></span></div><span><strong>{{ store.plan.selections.length }} 项工具</strong><small>{{ (store.plan.estimatedDiskMb / 1024).toFixed(1) }} GB</small></span></button>
+      <button v-if="store.activeScene === 'office' && store.step === 2 && !store.plan.steps.length" class="primary-button" type="button" @click="router.push('/environment')">完成浏览</button>
+      <button v-else-if="store.step < 4" class="primary-button" type="button" :disabled="nextDisabled" @click="navigate(store.step + 1)">下一步<ArrowRight :size="17" /></button>
       <button v-else class="secondary-button" type="button" :disabled="installer.running" @click="router.push('/environment')">返回主页</button>
     </footer>
 

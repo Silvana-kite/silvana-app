@@ -1,3 +1,4 @@
+mod download_check;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     use tauri::Manager;
