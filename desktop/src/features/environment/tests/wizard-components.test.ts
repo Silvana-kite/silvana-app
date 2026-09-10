@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
@@ -9,6 +9,7 @@ import { appRoutes } from '../../../app/router';
 import { useWizardStore } from '../stores/wizard';
 import ToolCard from '../components/ToolCard.vue';
 import WizardStepper from '../components/WizardStepper.vue';
+vi.mock('../services/release-cache', () => ({ loadReleases: vi.fn().mockRejectedValue(new Error('Offline test fixture')) }));
 
 describe('wizard interface', () => {
   beforeEach(() => {
@@ -25,11 +26,13 @@ describe('wizard interface', () => {
 
   it('emits selection and version changes from a tool card', async () => {
     const tool = catalog.tools.find((item) => item.id === 'node')!;
-    const wrapper = mount(ToolCard, { props: { tool, selected: false } });
+    const wrapper = mount(ToolCard, { props: { tool, selected: false }, global: { stubs: { teleport: true } } });
     await wrapper.find('.check-button').trigger('click');
-    await wrapper.find('select').setValue('node-26.8.1');
+    await wrapper.get('.tool-version-trigger').trigger('click');
+    await wrapper.findAll('.release-local .release-row')[1]!.get('button').trigger('click');
     expect(wrapper.emitted('toggle')).toHaveLength(1);
     expect(wrapper.emitted('version')).toEqual([['node-26.8.1']]);
+    wrapper.unmount();
   });
 
   it('marks a message as read when opened', async () => {

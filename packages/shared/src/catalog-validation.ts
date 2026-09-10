@@ -32,6 +32,11 @@ export function isCatalog(value: unknown): value is Catalog {
       || !Array.isArray(candidate.recipes)
       || toolIds.has(candidate.id)) return false;
     toolIds.add(candidate.id);
+    if (candidate.downloadUrl !== undefined) {
+      if (typeof candidate.downloadUrl !== 'string') return false;
+      try { const url = new URL(candidate.downloadUrl); if (url.protocol !== 'https:' || url.username || url.password) return false; } catch { return false; }
+    }
+    if (candidate.supportedPlatforms !== undefined && (!strings(candidate.supportedPlatforms) || candidate.supportedPlatforms.some(platform => !['windows', 'macos', 'linux'].includes(platform)))) return false;
 
     const versionIds = new Set<string>();
     for (const version of candidate.versions) {

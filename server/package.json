@@ -8,19 +8,23 @@
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "db:migrate": "node --env-file-if-exists=.env dist/catalog-cli.js --migrate",
+    "catalog:sync": "node --env-file-if-exists=.env dist/catalog-cli.js"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.1",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
     "@nestjs/swagger": "^11.2.0",
-    "@neondatabase/serverless": "^1.0.1",
     "@siilvana/catalog": "workspace:*",
     "@siilvana/shared": "workspace:*",
+    "cheerio": "^1.2.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "drizzle-orm": "^0.44.5",
+    "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
@@ -28,7 +32,7 @@
     "@nestjs/cli": "^11.0.10",
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.0",
+    "@types/pg": "^8.23.1",
     "drizzle-kit": "^0.31.4"
   }
 }
-

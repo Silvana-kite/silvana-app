@@ -1,0 +1,19 @@
+{
+  "identifier": "app.siilvana.history-verification",
+  "build": {
+    "beforeDevCommand": "",
+    "devUrl": "http://127.0.0.1:1422"
+  },
+  "app": {
+    "windows": [{
+      "label": "main",
+      "title": "Siilvana history verification",
+      "width": 1280,
+      "height": 820,
+      "minWidth": 760,
+      "minHeight": 600,
+      "additionalBrowserArgs": "--remote-debugging-port=9388 --remote-debugging-address=127.0.0.1",
+      "dataDirectory": "siilvana-history-verification"
+    }]
+  }
+}

@@ -1,4 +1,5 @@
 import type { Catalog, InstallRecipe, Platform, Tool } from '@siilvana/shared';
+import { additionalSoftware, officialDownloads } from './software.ts';
 
 const verify = (executable: string, ...args: string[]) => ({ executable, args });
 
@@ -131,9 +132,9 @@ const tools: Tool[] = [
 
 export const catalog: Catalog = {
   schemaVersion: 1,
-  revision: '2026-09-09.1',
+  revision: '2026-09-09.2',
   generatedAt: '2026-09-06T00:00:00Z',
-  tools,
+  tools: [...tools.map(tool => ({ ...tool, downloadUrl: officialDownloads[tool.id] })), ...additionalSoftware],
   dependencies: [
     { sourceToolId: 'node', targetToolId: 'volta', kind: 'requires' },
     { sourceToolId: 'pnpm', targetToolId: 'node', kind: 'requires', targetRange: '>=18' },

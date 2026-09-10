@@ -25,7 +25,7 @@ import {
 
 const categoryLabels: Record<ToolCategory | 'all', string> = {
   all: '全部', runtime: '语言运行时', 'package-manager': '包管理器', framework: '框架',
-  database: '数据库', editor: '编辑器 / IDE', cli: '命令行', container: '容器',
+  database: '数据库', editor: '编辑器 / IDE', cli: '命令行', container: '容器', browser: '浏览器', terminal: '终端', 'api-client': '接口调试',
 };
 
 function detectedPlatform(): Platform {
@@ -153,6 +153,8 @@ export const useWizardStore = defineStore('wizard', () => {
   }
 
   function setVersion(toolId: string, versionId: string) {
+    const tool = catalog.value.tools.find(candidate => candidate.id === toolId);
+    if (!tool?.recipes.some(recipe => recipe.approved && recipe.versionId === versionId && recipe.platform === platform.value && (recipe.architecture === 'any' || recipe.architecture === architecture.value))) return;
     templateId.value = 'custom';
     selected.value = { ...selected.value, [toolId]: versionId };
   }

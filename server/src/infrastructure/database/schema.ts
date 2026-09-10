@@ -1,4 +1,20 @@
 import { boolean, date, integer, jsonb, pgTable, text, timestamp, unique, uuid, varchar } from 'drizzle-orm/pg-core';
+import type { ToolRelease } from '@siilvana/shared';
+import { primaryKey } from 'drizzle-orm/pg-core';
+
+export const releaseHistory = pgTable('release_history', {
+  toolId: text('tool_id').notNull(), version: text('version').notNull(), payload: jsonb('payload').$type<ToolRelease>().notNull(),
+}, table => [primaryKey({ columns: [table.toolId, table.version] })]);
+export const releaseSources = pgTable('release_sources', {
+  toolId: text('tool_id').primaryKey(), revision: text('revision').default('').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }), nextRunAt: timestamp('next_run_at', { withTimezone: true }).defaultNow().notNull(),
+  leaseToken: text('lease_token'), leaseUntil: timestamp('lease_until', { withTimezone: true }),
+  failures: integer('failures').default(0).notNull(), error: text('error'), checkpoint: jsonb('checkpoint'), status: text('status').default('pending').notNull(),
+});
+export const releasePageCache = pgTable('release_page_cache', {
+  url: text('url').primaryKey(), etag: text('etag'), lastModified: text('last_modified'), body: text('body').notNull(), nextUrl: text('next_url'),
+  checksum: text('checksum').notNull(), parserVersion: integer('parser_version').notNull(), checkedAt: timestamp('checked_at', { withTimezone: true }).defaultNow().notNull(),
+});
 
 export const categories = pgTable('categories', {
   id: uuid('id').defaultRandom().primaryKey(),

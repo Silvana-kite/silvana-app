@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import './infrastructure/source-tls.js';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -6,8 +7,9 @@ import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   const origins = (process.env.DESKTOP_ORIGIN ?? 'tauri://localhost,http://tauri.localhost,http://localhost:1420').split(',');
-  app.enableCors({ origin: origins });
+  app.enableCors({ origin: origins, exposedHeaders: ['ETag'] });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   app.setGlobalPrefix('v1', { exclude: ['health', 'internal/cron/catalog-sync'] });
 
@@ -22,4 +24,3 @@ async function bootstrap() {
 }
 
 void bootstrap();
-

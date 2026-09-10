@@ -14,6 +14,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             device::device_info,
             device::scan_disks,
+            browser::browser_open,
+            browser::browser_resize,
+            browser::browser_hide,
+            browser::browser_action,
             installer::prepare_install,
             installer::start_install,
             installer::get_install_session,
@@ -25,3 +29,4 @@ pub fn run() {
 }
 mod device;
 mod installer;
+mod browser;

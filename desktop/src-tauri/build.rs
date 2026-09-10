@@ -2,6 +2,7 @@ use std::{env, path::PathBuf, process::Command};
 
 fn main() {
     println!("cargo:rerun-if-changed=../../packages/catalog/src/index.ts");
+    println!("cargo:rerun-if-changed=../../packages/catalog/src/software.ts");
     println!("cargo:rerun-if-changed=../../tools/catalog/native-manifest.mjs");
     let manifest = Command::new("node")
         .arg("../../tools/catalog/native-manifest.mjs")

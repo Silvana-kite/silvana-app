@@ -5,6 +5,7 @@ import { useInstallerStore } from '../stores/installer';
 import { useEnvironmentStore } from '../stores/environment';
 import ScanPermissionDialog from './ScanPermissionDialog.vue';
 import { isDesktop } from '../services/device';
+import { openOfficialUrl } from '../../../shared/services/official-browser';
 const props = defineProps<{ review?: boolean }>();
 const installer = useInstallerStore();
 const environment = useEnvironmentStore();
@@ -29,7 +30,7 @@ onMounted(async () => {
     <div v-if="installer.error" class="install-blocker" role="alert">{{ installer.error }}</div>
     <template v-if="visible && installer.session">
       <progress v-if="!review" :value="installer.completed" :max="Math.max(1, installer.session.steps.length)" aria-label="已完成安装步骤" />
-      <div v-for="blocker in installer.session.blockers" :key="blocker.message" class="install-blocker"><TriangleAlert :size="14" /> {{ blocker.message }}<a v-if="blocker.url" :href="blocker.url" target="_blank" rel="noopener noreferrer">官方安装入口</a></div>
+      <div v-for="blocker in installer.session.blockers" :key="blocker.message" class="install-blocker"><TriangleAlert :size="14" /> {{ blocker.message }}<a v-if="blocker.url" :href="blocker.url" @click.prevent="openOfficialUrl(blocker.url)">官方安装入口</a></div>
       <div v-for="step in installer.session.steps" :key="step.toolId" class="execution-row">
         <Check v-if="['skipped','success'].includes(step.status)" :size="18" class="text-success" /><LoaderCircle v-else-if="step.status === 'running'" :size="18" class="spin" /><TriangleAlert v-else-if="step.status === 'failed'" :size="18" /><Circle v-else :size="16" />
         <div><strong>{{ step.name }} <span>{{ step.version }}</span></strong><small v-if="step.installedVersion">本机 {{ step.installedVersion }}<template v-if="step.status === 'pending'"> → {{ step.version }}</template></small><small v-if="step.targetDisk">目标磁盘 {{ step.targetDisk }}<template v-if="step.installDirectory"> · {{ step.installDirectory }}</template></small><small v-if="step.message">{{ step.message }}</small><small v-if="step.executablePath">{{ step.executablePath }}</small></div>

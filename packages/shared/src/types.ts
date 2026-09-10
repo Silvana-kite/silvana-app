@@ -7,7 +7,10 @@ export type ToolCategory =
   | 'database'
   | 'editor'
   | 'cli'
-  | 'container';
+  | 'container'
+  | 'browser'
+  | 'terminal'
+  | 'api-client';
 export type PackageManager = 'winget' | 'scoop' | 'choco' | 'brew' | 'apt' | 'volta' | 'npm' | 'official';
 
 export interface ToolVersion {
@@ -42,6 +45,8 @@ export interface Tool {
   description: string;
   category: ToolCategory;
   homepage: string;
+  downloadUrl?: string;
+  supportedPlatforms?: Platform[];
   icon: string;
   diskMb: number;
   versions: ToolVersion[];
@@ -53,6 +58,36 @@ export interface DependencyRule {
   targetToolId: string;
   kind: 'requires' | 'recommends';
   targetRange?: string;
+}
+
+/** Discovery metadata is separate from the reviewed executable catalog. */
+export interface ReleaseAsset {
+  url: string;
+  name: string;
+  kind: 'binary' | 'source';
+  platform?: Platform;
+  architecture?: Architecture | 'x86' | 'universal';
+}
+export interface ToolRelease {
+  version: string;
+  originalVersion: string;
+  releaseDate?: string;
+  channel: 'stable' | 'lts' | 'current' | 'eol';
+  eolDate?: string;
+  bundledNpm?: string;
+  pageUrl: string;
+  sourceUrl: string;
+  assets: ReleaseAsset[];
+}
+export interface ToolReleasePage {
+  toolId: string;
+  items: ToolRelease[];
+  total: number;
+  page: number;
+  pageSize: number;
+  revision: string;
+  updatedAt: string | null;
+  status: 'ready' | 'stale' | 'pending' | 'unavailable' | 'unsupported';
 }
 
 export interface CompatibilityRule {

@@ -49,6 +49,8 @@ pnpm check                       # 目录校验、类型检查、测试和构建
 
 [原生安装流程、权限、日志与三平台验收](docs/installation.md)
 
+[软件历史版本采集、数据库初始化与内置浏览器](docs/release-history.md)
+
 ## License
 
 [MIT](LICENSE)
