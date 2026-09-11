@@ -1,6 +1,13 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { Pool } from 'pg';
 
+class DatabaseMigrationError extends Error {
+  constructor(message: string, readonly cause: unknown) {
+    super(message);
+    this.name = 'DatabaseMigrationError';
+  }
+}
+
 export async function migrate(connectionString = process.env.DATABASE_URL, transport: 'tcp' | 'neon' = 'tcp') {
   if (!connectionString) throw new Error('DATABASE_URL is required');
   const options = { connectionString, connectionTimeoutMillis: 15_000 };
@@ -40,6 +47,6 @@ export async function migrate(connectionString = process.env.DATABASE_URL, trans
         ? ' Check DATABASE_URL and secure WebSocket access to Neon (TCP 443).'
         : ' Check DATABASE_URL and network access to the database (normally TCP 5432). For Neon, try db:migrate --neon to connect over secure WebSocket (TCP 443).'
       : '';
-    throw new Error(`Database migration failed while ${stage}.${hint}`, { cause: error });
+    throw new DatabaseMigrationError(`Database migration failed while ${stage}.${hint}`, error);
   } finally { await pool.end(); }
 }
