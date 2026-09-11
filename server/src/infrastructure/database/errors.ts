@@ -16,7 +16,8 @@ export function formatDatabaseError(error: unknown, connectionString = process.e
     const code = 'code' in value ? String(value.code) : '';
     lines.push([value.name, code, value.message].filter(Boolean).join(': '));
     if (value instanceof AggregateError) for (const nested of value.errors) visit(nested);
-    if (value.cause !== undefined) visit(value.cause);
+    const cause = (value as Error & { cause?: unknown }).cause;
+    if (cause !== undefined) visit(cause);
   };
   visit(error);
   let result = lines.join('\n');

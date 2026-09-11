@@ -87,7 +87,8 @@ export class ReleasesService {
       await this.repository.log(toolId, 'success', checkpoint.releases.length, undefined, startedAt);
       return { toolId, status: 'ready', count: checkpoint.releases.length };
     } catch (error) {
-      const message = error instanceof Error ? `${error.message}${error.cause instanceof Error ? `: ${error.cause.message}` : ''}` : 'Unknown source error';
+      const cause = error instanceof Error ? (error as Error & { cause?: unknown }).cause : undefined;
+      const message = error instanceof Error ? `${error.message}${cause instanceof Error ? `: ${cause.message}` : ''}` : 'Unknown source error';
       await this.repository.fail(toolId, token, message, error instanceof SourceHttpError ? error.retryMs : undefined);
       await this.repository.log(toolId, 'failed', 0, message, startedAt);
       return { toolId, status: 'failed', error: message };
