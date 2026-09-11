@@ -6,10 +6,15 @@ import { HistoryService } from './modules/releases/history.service.js';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { migrate } from './infrastructure/database/migrate.js';
+import { formatDatabaseError } from './infrastructure/database/errors.js';
 import { ReleasesService } from './modules/releases/releases.service.js';
 
 async function main() {
-  if (process.argv.includes('--migrate')) { await migrate(); console.log('Release history migration applied'); return; }
+  if (process.argv.includes('--migrate')) {
+    await migrate(process.env.DATABASE_URL, process.argv.includes('--neon') ? 'neon' : 'tcp');
+    console.log('Release history migration applied');
+    return;
+  }
   if (process.env.HISTORY_SIGNING_KEY_FILE) process.env.HISTORY_SIGNING_KEY = await readFile(process.env.HISTORY_SIGNING_KEY_FILE, 'utf8');
   if (new URL(process.env.DATABASE_URL ?? 'postgresql://localhost/unconfigured').pathname.endsWith('_test') && !process.env.RELEASE_TEST_DATABASE_URL) throw new Error('Daily collection must not use a test database');
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error', 'warn'] });
@@ -22,4 +27,4 @@ async function main() {
     if (result.status === 'partial' || result.status === 'busy' || result.status === 'pending') process.exitCode = 1;
   } finally { await app.close(); }
 }
-main().catch(error => { console.error(error.message); process.exitCode = 1; });
+main().catch(error => { console.error(formatDatabaseError(error)); process.exitCode = 1; });
