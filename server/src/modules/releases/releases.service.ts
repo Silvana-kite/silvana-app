@@ -27,7 +27,11 @@ export class ReleasesService {
     const status = row.updated_at ? (row.status === 'failed' || Date.now() - new Date(row.updated_at).getTime() > 2 * 86400000 ? 'stale' : 'ready') : row.status === 'failed' ? 'unavailable' : 'pending';
     return { ...empty, items: items.slice((page - 1) * pageSize, page * pageSize).map(item => ({ ...item, assets: item.assets.map(asset => ({ ...asset, platform: asset.platform && ['windows','macos','linux'].includes(asset.platform) ? asset.platform : undefined, architecture: asset.architecture && ['x64','arm64','x86','universal'].includes(asset.architecture) ? asset.architecture : undefined })) })), total: items.length, revision: row.revision, updatedAt: row.updated_at?.toISOString() ?? null, status };
   }
-  async sync(toolIds?: string[], options: { force?: boolean; budgetMs?: number } = {}) {
+  async sync(toolIds?: string[], options: {
+    force?: boolean;
+    budgetMs?: number;
+    onProgress?: (event: { toolId: string; status: string; count?: number; error?: string }) => void;
+  } = {}) {
     const chosen = toolIds?.length ? sources.filter(s => toolIds.includes(s.toolId)) : sources;
     if (toolIds?.some(id => !sources.some(s => s.toolId === id))) throw new BadRequestException('Unknown release source');
     const lock = await this.repository.pool.connect();
@@ -42,7 +46,13 @@ export class ReleasesService {
       // A short cron budget must not repeatedly favor the beginning of the catalog.
       const queue = [...chosen].sort((a, b) => (dueTimes.get(a.toolId) ?? 0) - (dueTimes.get(b.toolId) ?? 0));
       const worker = async () => {
-        while (queue.length && Date.now() < deadline) results.push(await this.syncSource(queue.shift()!, deadline, options.force));
+        while (queue.length && Date.now() < deadline) {
+          const source = queue.shift()!;
+          options.onProgress?.({ toolId: source.toolId, status: 'started' });
+          const result = await this.syncSource(source, deadline, options.force);
+          results.push(result);
+          options.onProgress?.(result);
+        }
       };
       const workers = await Promise.allSettled([worker(), worker()]);
       // Keep the coordinator lock until every in-flight worker has stopped,

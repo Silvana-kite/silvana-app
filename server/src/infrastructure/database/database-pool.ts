@@ -28,7 +28,13 @@ export function databaseTransport(value = process.env.DATABASE_TRANSPORT): Datab
 export async function createDatabasePool(
   connectionString: string,
   transport: DatabaseTransport,
-  options: { max?: number; connectionTimeoutMillis?: number } = {},
+  options: {
+    max?: number;
+    connectionTimeoutMillis?: number;
+    query_timeout?: number;
+    statement_timeout?: number;
+    keepAlive?: boolean;
+  } = {},
 ): Promise<DatabasePool> {
   const config = { connectionString, ...options };
   if (transport === 'tcp') return new PgPool(config) as unknown as DatabasePool;

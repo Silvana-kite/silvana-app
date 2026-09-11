@@ -9,7 +9,13 @@ const databaseProvider: Provider = {
   useFactory: async (): Promise<Database | null> => {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) return null;
-    const pool = await createDatabasePool(databaseUrl, databaseTransport(), { max: 3, connectionTimeoutMillis: 10_000 });
+    const pool = await createDatabasePool(databaseUrl, databaseTransport(), {
+      max: 3,
+      connectionTimeoutMillis: 10_000,
+      query_timeout: 30_000,
+      statement_timeout: 30_000,
+      keepAlive: true,
+    });
     pool.on('error', () => Logger.warn('An idle database connection was lost; subsequent requests will reconnect.', 'Database'));
     return { $client: pool };
   },
