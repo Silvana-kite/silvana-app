@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { Pool } from 'pg';
+import { createDatabasePool, type DatabaseTransport } from './database-pool.js';
 
 class DatabaseMigrationError extends Error {
   constructor(message: string, readonly cause: unknown) {
@@ -8,22 +8,13 @@ class DatabaseMigrationError extends Error {
   }
 }
 
-export async function migrate(connectionString = process.env.DATABASE_URL, transport: 'tcp' | 'neon' = 'tcp') {
+export async function migrate(connectionString = process.env.DATABASE_URL, transport: DatabaseTransport = 'tcp') {
   if (!connectionString) throw new Error('DATABASE_URL is required');
-  const options = { connectionString, connectionTimeoutMillis: 15_000 };
-  const pool = await (async () => {
-    if (transport === 'tcp') return new Pool(options);
-    if (!new URL(connectionString).hostname.endsWith('.neon.tech')) {
-      throw new Error('--neon requires a Neon DATABASE_URL (*.neon.tech)');
-    }
-    const { Pool: NeonPool, neonConfig } = await import('@neondatabase/serverless');
-    neonConfig.webSocketConstructor = WebSocket;
-    return new NeonPool(options);
-  })();
+  const pool = await createDatabasePool(connectionString, transport, { connectionTimeoutMillis: 15_000 });
   let stage = 'connecting to PostgreSQL';
   try {
     const directory = new URL('../../../migrations/', import.meta.url);
-    const client: { query(sql: string): Promise<unknown>; release(): void } = await pool.connect();
+    const client = await pool.connect();
     try {
       stage = 'starting migration transaction';
       await client.query('BEGIN');

@@ -7,11 +7,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { migrate } from './infrastructure/database/migrate.js';
 import { formatDatabaseError } from './infrastructure/database/errors.js';
+import { databaseTransport } from './infrastructure/database/database-pool.js';
 import { ReleasesService } from './modules/releases/releases.service.js';
 
 async function main() {
+  if (process.argv.includes('--neon')) process.env.DATABASE_TRANSPORT = 'neon';
   if (process.argv.includes('--migrate')) {
-    await migrate(process.env.DATABASE_URL, process.argv.includes('--neon') ? 'neon' : 'tcp');
+    await migrate(process.env.DATABASE_URL, databaseTransport());
     console.log('Release history migration applied');
     return;
   }

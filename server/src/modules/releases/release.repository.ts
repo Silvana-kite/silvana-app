@@ -1,9 +1,9 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { randomUUID, createHash } from 'node:crypto';
-import type { Pool } from 'pg';
 import { toHistory, redactError } from './history-codec.js';
 import type { ToolRelease } from '@siilvana/shared';
 import { InjectDatabase, type Database } from '../../infrastructure/database/database.module.js';
+import type { DatabasePool } from '../../infrastructure/database/database-pool.js';
 
 export interface Checkpoint { parserVersion: number; sourceFingerprint?: string; metadata?: { ltsFeatures?: number[] }; queue: string[]; visited: string[]; releases: ToolRelease[] }
 export interface SourceState {
@@ -19,7 +19,7 @@ export const PARSER_VERSION = 5;
 export class ReleaseRepository {
   constructor(@InjectDatabase() private readonly database: Database | null) {}
   get available() { return !!this.database; }
-  get pool(): Pool {
+  get pool(): DatabasePool {
     if (!this.database) throw new ServiceUnavailableException('历史版本服务需要配置 DATABASE_URL');
     return this.database.$client;
   }

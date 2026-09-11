@@ -25,7 +25,7 @@ pnpm history:validate
 
 首次配置：创建一个独立日常 PostgreSQL 数据库，通过进程环境提供 DATABASE_URL，再执行 `node tools/catalog/init-local.mjs`。它保留现有 `.env`，只在 `.runtime/history` 创建本地签名私钥。生产环境必须改用受保护的发布密钥及独立 datasetId。
 
-Neon 连接串使用 `sslmode=verify-full`，明确保留证书与主机名校验。若本机通过 `pg` 连接 Neon 超时，可先构建后端，再运行 `pnpm --filter @siilvana/server db:migrate --neon`；该选项通过 Neon 加密 WebSocket（443 端口）执行同一套事务迁移，仅支持 `*.neon.tech` 数据库，不改变 API 和采集任务的连接方式。迁移失败会输出失败阶段、嵌套错误及错误码，并隐藏连接串和密码；连接超时为 15 秒。
+Neon 连接串使用 `sslmode=verify-full`，明确保留证书与主机名校验。若本机通过 `pg` 连接 Neon 超时，可先构建后端，再运行 `pnpm --filter @siilvana/server db:migrate --neon` 或 `pnpm --filter @siilvana/server catalog:sync --all --neon`；该选项通过 Neon 加密 WebSocket（443 端口）执行事务，仅支持 `*.neon.tech` 数据库。部署环境可设置 `DATABASE_TRANSPORT=neon` 使用相同连接方式。迁移失败会输出失败阶段、嵌套错误及错误码，并隐藏连接串和密码；连接超时为 15 秒。
 
 本机 `.runtime/history/local-database.json` 可配置 pgCtl 可执行文件、工作区 `.runtime` 内的 dataDirectory 和本机监听 port。远程数据库部署无需该文件。连接串和私钥不可提交；目录和快照发布信息不包含它们。数据库连接配置读取失败时服务返回不可用，不清空客户端历史。
 

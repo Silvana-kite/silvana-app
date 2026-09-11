@@ -44,7 +44,7 @@ describe('database migration', () => {
   });
 
   it('rejects non-Neon endpoints before opening a WebSocket connection', async () => {
-    await expect(migrate('postgresql://localhost/test', 'neon')).rejects.toThrow('--neon requires a Neon DATABASE_URL');
+    await expect(migrate('postgresql://localhost/test', 'neon')).rejects.toThrow('Neon transport requires a Neon DATABASE_URL');
     expect(mocks.neonPool).not.toHaveBeenCalled();
     expect(mocks.connect).not.toHaveBeenCalled();
   });
