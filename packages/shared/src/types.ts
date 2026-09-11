@@ -17,6 +17,7 @@ export type PackageManager = 'winget' | 'scoop' | 'choco' | 'brew' | 'apt' | 'vo
 export interface ToolVersion {
   id: string;
   version: string;
+  label?: string;
   channel: 'lts' | 'stable' | 'current' | 'eol';
   recommended?: boolean;
   acceptedRange?: string;
@@ -165,6 +166,7 @@ export interface InstallStep {
   toolName: string;
   versionId: string;
   version: string;
+  versionLabel?: string;
   manager: PackageManager;
   strategy: InstallRecipe['strategy'];
   reason: 'explicit' | 'required';

@@ -51,11 +51,19 @@ const tools: Tool[] = [
     id: 'node', name: 'Node.js', category: 'runtime', icon: 'braces', diskMb: 180,
     description: '前端构建与 JavaScript/TypeScript 服务端运行时。', homepage: 'https://nodejs.org',
     versions: [
-      { id: 'node-24.20.0', version: '24.20.0', channel: 'lts', recommended: true, managedByToolId: 'volta', bundledTools: [{ toolId: 'npm', version: '11.19.0' }] },
+      { id: 'node-24-system', version: '24', label: '24.x LTS · 独立安装', acceptedRange: '>=24.0.0, <25.0.0', channel: 'lts', recommended: true, bundledTools: [{ toolId: 'npm', version: 'bundled' }] },
+      { id: 'node-system', version: '18.19.0', label: '系统源版本（≥18.19）· 独立安装', acceptedRange: '>=18.19.0, <27.0.0', channel: 'stable', recommended: true, bundledTools: [{ toolId: 'npm', version: 'bundled' }] },
+      { id: 'node-24.20.0', version: '24.20.0', channel: 'lts', managedByToolId: 'volta', bundledTools: [{ toolId: 'npm', version: '11.19.0' }] },
       { id: 'node-26.8.1', version: '26.8.1', channel: 'current', managedByToolId: 'volta', bundledTools: [{ toolId: 'npm', version: '11.19.0' }] },
       { id: 'node-20.20.2', version: '20.20.2', channel: 'eol', eolDate: '2026-04-30', managedByToolId: 'volta', bundledTools: [{ toolId: 'npm', version: '10' }] },
     ],
     recipes: [
+      ...systemRecipes('node24', 'node-24-system', {
+        windows: { manager: 'winget', id: 'OpenJS.NodeJS.LTS' },
+        macos: { manager: 'brew', id: 'node@24' },
+      }, verify('node', '--version')).map(recipe => ({ ...recipe, arguments: recipe.platform === 'windows' ? ['--installer-type', 'wix'] : recipe.arguments })),
+      ...systemRecipes('node-system', 'node-system', { linux: { manager: 'apt', id: 'nodejs' } }, verify('node', '--version'))
+        .map(recipe => ({ ...recipe, arguments: ['npm'] })),
       ...(['windows', 'macos', 'linux'] as const).flatMap((platform) => [
         { id: `node-24-${platform}-volta`, versionId: 'node-24.20.0', platform, architecture: 'any' as const, strategy: 'version-manager' as const, manager: 'volta' as const, packageId: 'node@24.20.0', arguments: ['npm@11.19.0'], verify: verify('node', '--version'), approved: true },
         { id: `node-26-${platform}-volta`, versionId: 'node-26.8.1', platform, architecture: 'any' as const, strategy: 'version-manager' as const, manager: 'volta' as const, packageId: 'node@26.8.1', arguments: ['npm@11.19.0'], verify: verify('node', '--version'), approved: true },
@@ -67,6 +75,7 @@ const tools: Tool[] = [
     id: 'npm', name: 'npm', category: 'package-manager', icon: 'package', diskMb: 0,
     description: 'Node.js 自带的包管理器；本项目只用它引导安装 pnpm。', homepage: 'https://www.npmjs.com',
     versions: [
+      { id: 'npm-bundled', version: 'bundled', label: '随 Node.js 安装的版本', acceptedRange: '>=8.0.0', channel: 'stable' },
       { id: 'npm-11.19.0', version: '11.19.0', channel: 'stable', recommended: true },
       { id: 'npm-10', version: '10', channel: 'stable' },
     ], recipes: [],
@@ -134,11 +143,10 @@ const tools: Tool[] = [
 
 export const catalog: Catalog = {
   schemaVersion: 1,
-  revision: '2026-09-10.3',
+  revision: '2026-09-10.4',
   generatedAt: '2026-09-10T00:00:00Z',
   tools: [...tools.map(tool => ({ ...tool, downloadUrl: officialDownloads[tool.id] })), ...additionalSoftware].map(withScene).concat(sceneSoftware),
   dependencies: [
-    { sourceToolId: 'node', targetToolId: 'volta', kind: 'requires' },
     { sourceToolId: 'pnpm', targetToolId: 'node', kind: 'requires', targetRange: '>=18' },
     { sourceToolId: 'maven', targetToolId: 'jdk', kind: 'requires', targetRange: '>=17' },
     { sourceToolId: 'docker', targetToolId: 'git', kind: 'recommends' },
@@ -148,12 +156,12 @@ export const catalog: Catalog = {
     { sourceToolId: 'maven', sourceRange: '*', targetToolId: 'jdk', targetRange: '>=17', relation: 'requires', severity: 'error', message: '当前 Maven 方案需要 JDK 17 或更高版本。' },
   ],
   templates: [
-    { id: 'frontend-web', scene: 'frontend', name: '前端 Web', description: 'Volta、Node LTS、pnpm、Git 与 VS Code。', scenario: 'frontend', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
-    { id: 'node-backend', visible: false, name: 'Node.js 后端', description: 'Node 工具链、PostgreSQL 与 Docker。', scenario: 'backend', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
+    { id: 'frontend-web', scene: 'frontend', name: '前端 Web', description: 'Node LTS、pnpm、Git 与 VS Code；版本管理器按需选择。', scenario: 'frontend', items: [{ toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
+    { id: 'node-backend', visible: false, name: 'Node.js 后端', description: 'Node 工具链、PostgreSQL 与 Docker。', scenario: 'backend', items: [{ toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
     { id: 'java-backend', scene: 'java', name: 'Java', description: 'JDK、Maven、Gradle 与 Java 开发软件。', scenario: 'backend', items: [{ toolId: 'jdk' }, { toolId: 'maven' }, { toolId: 'git' }, { toolId: 'vscode' }] },
     { id: 'data-science', scene: 'python', name: 'Python', description: 'Python、Git 与 VS Code 的轻量起点。', scenario: 'data-science', items: [{ toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }] },
-    { id: 'mobile-cross-platform', visible: false, name: '移动开发', description: '面向跨端 JavaScript 应用的 Node 工具链。', scenario: 'mobile', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
-    { id: 'fullstack', visible: false, name: '全栈开发', description: '前后端运行时、数据库与容器工具。', scenario: 'fullstack', items: [{ toolId: 'volta' }, { toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
+    { id: 'mobile-cross-platform', visible: false, name: '移动开发', description: '面向跨端 JavaScript 应用的 Node 工具链。', scenario: 'mobile', items: [{ toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'git' }, { toolId: 'vscode' }] },
+    { id: 'fullstack', visible: false, name: '全栈开发', description: '前后端运行时、数据库与容器工具。', scenario: 'fullstack', items: [{ toolId: 'node' }, { toolId: 'pnpm' }, { toolId: 'python' }, { toolId: 'git' }, { toolId: 'vscode' }, { toolId: 'postgresql' }, { toolId: 'docker' }] },
     { id: 'office', scene: 'office', name: '办公', description: '文档、PDF、压缩与团队协作软件，直接下载最新版。', scenario: 'office', items: [] },
     { id: 'custom', name: '自定义', description: '从空白清单开始选择。', scenario: 'custom', items: [] },
   ],

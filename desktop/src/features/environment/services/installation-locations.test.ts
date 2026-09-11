@@ -16,7 +16,7 @@ describe('per-tool installation targets', () => {
   it('binds npm to Node and includes automatically resolved dependencies', () => {
     const value = plan(['pnpm']);
     const targets = effectiveTargets(catalog, value, { node: 'D:\\', npm: 'E:\\', pnpm: 'E:\\', volta: 'C:\\', git: 'Z:\\' });
-    expect(targets).toEqual({ node: 'D:\\', npm: 'D:\\', pnpm: 'E:\\', volta: 'C:\\' });
+    expect(targets).toEqual({ node: 'D:\\', npm: 'D:\\', pnpm: 'E:\\' });
   });
   it('sums programs on each disk and reserves cache space only once on its volume', () => {
     const value = plan(['git', 'vscode']);

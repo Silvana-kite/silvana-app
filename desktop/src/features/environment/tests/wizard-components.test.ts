@@ -29,7 +29,7 @@ describe('wizard interface', () => {
     const wrapper = mount(ToolCard, { props: { tool, selected: false }, global: { stubs: { teleport: true } } });
     await wrapper.find('.check-button').trigger('click');
     await wrapper.get('.tool-version-trigger').trigger('click');
-    await wrapper.findAll('.release-local .release-row')[1]!.get('button').trigger('click');
+    await wrapper.findAll('.release-local .release-row').find(row => row.text().includes('26.8.1'))!.get('button').trigger('click');
     expect(wrapper.emitted('toggle')).toHaveLength(1);
     expect(wrapper.emitted('version')).toEqual([['node-26.8.1']]);
     wrapper.unmount();

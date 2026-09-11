@@ -65,7 +65,8 @@ describe('environment permission and installation gates', () => {
   });
   it('includes resolved dependencies and reevaluates larger selections', async () => {
     const store = await ready(); store.candidate = { pnpm: 'pnpm-10.34.5' };
-    expect(store.plan.selections.map((item) => item.toolId)).toEqual(expect.arrayContaining(['pnpm', 'node', 'volta']));
+    expect(store.plan.selections.map((item) => item.toolId)).toEqual(expect.arrayContaining(['pnpm', 'node', 'npm']));
+    expect(store.plan.selections.map((item) => item.toolId)).not.toContain('volta');
     expect(store.budget).toBe(requiredBytes(store.plan.estimatedDiskMb));
     vi.mocked(readDisks).mockResolvedValue([volume(store.budget)]);
     await rescan(store); store.commit();
@@ -192,7 +193,9 @@ describe('environment permission and installation gates', () => {
   it('labels universal recipes and omits tools with unavailable dependencies', async () => {
     const store = await ready(); expect(store.matched.find((item) => item.tool.id === 'node')?.universal).toBe(true);
     useWizardStore().catalog = { ...useWizardStore().catalog, tools: useWizardStore().catalog.tools.filter((item) => item.id !== 'volta') };
-    expect(store.matched.some((item) => item.tool.id === 'node')).toBe(false);
+    expect(store.matched.some((item) => item.tool.id === 'node')).toBe(true);
+    useWizardStore().catalog = { ...useWizardStore().catalog, tools: useWizardStore().catalog.tools.filter((item) => item.id !== 'node') };
+    expect(store.matched.some((item) => item.tool.id === 'pnpm')).toBe(false);
   });
   it('keeps per-tool disks through commit, re-scan and persisted wizard state', async () => {
     vi.mocked(readDisks).mockResolvedValue(['C:\\', 'D:\\', 'E:\\'].map(id => ({ ...volume(80 * 1024 ** 3, id), systemTarget: id === 'C:\\', temporaryTarget: id === 'C:\\' })));

@@ -15,7 +15,7 @@ describe('installation disk controls', () => {
   it('changes one software target and its bundled component without moving independent dependencies', async () => {
     const wrapper = render();
     await wrapper.get('select[aria-label="Node.js 安装磁盘"]').setValue('D:\\');
-    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({ node: 'D:\\', npm: 'D:\\', pnpm: 'C:\\', volta: 'C:\\' });
+    expect(wrapper.emitted('update:modelValue')?.[0]?.[0]).toEqual({ node: 'D:\\', npm: 'D:\\', pnpm: 'C:\\' });
     expect(wrapper.get('select[aria-label="npm 安装磁盘"]').attributes('disabled')).toBeDefined();
     expect(wrapper.text()).toContain('跟随 Node.js');
   });

@@ -27,11 +27,15 @@ describe('historical version interaction', () => {
     vi.mocked(loadReleases).mockRejectedValue(new Error('offline'));
     const wrapper = mount(VersionPanel, { props: { tool, platform: 'windows', architecture: 'x64' }, global: { stubs: { teleport: true } } });
     await flushPromises(); expect(wrapper.get('[role="alert"]').text()).toContain('offline');
-    await wrapper.get('.release-local button').trigger('click'); expect(wrapper.emitted('select')).toEqual([['node-24.20.0']]); wrapper.unmount();
+    expect(wrapper.get('.release-local').text()).toContain('独立安装');
+    expect(wrapper.get('.release-local').text()).toContain('通过 Volta 管理');
+    await wrapper.get('.release-local button').trigger('click'); expect(wrapper.emitted('select')).toEqual([['node-24-system']]); wrapper.unmount();
   });
   it('keeps manual software visible without allowing an empty installation selection', () => {
     const wrapper = mount(ToolCard, { props: { tool: catalog.tools.find(t => t.id === 'chrome')!, selected: false, platform: 'windows', architecture: 'x64' } });
-    expect(wrapper.get('.check-button').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('.check-button').exists()).toBe(false);
+    expect(wrapper.get('.tool-status').text()).toBe('需手动安装');
+    expect(wrapper.get('.tool-download-button').text()).toContain('前往官网下载');
     expect(wrapper.get('.tool-version-trigger').text()).toContain('历史版本'); wrapper.unmount();
   });
 });

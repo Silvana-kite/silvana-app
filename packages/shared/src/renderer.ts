@@ -61,8 +61,12 @@ export function renderScript(steps: InstallStep[], shell: 'powershell' | 'bash',
     ? [`# Siilvana catalog ${revision}`, "$ErrorActionPreference = 'Stop'", 'Set-StrictMode -Version Latest', '']
     : [`#!/usr/bin/env bash`, `# Siilvana catalog ${revision}`, 'set -Eeuo pipefail', ''];
   const lines = steps.flatMap((step) => [
-    `# ${step.toolName} ${step.version}`,
+    `# ${step.toolName} ${step.versionLabel ?? step.version}`,
     installCommand(step.action, shell),
+    ...(step.toolId === 'node' && step.manager === 'winget'
+      ? ["$env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + $env:Path"] : []),
+    ...(step.toolId === 'node' && step.manager === 'brew' && step.versionId === 'node-24-system'
+      ? ['export PATH="$(brew --prefix node@24)/bin:$PATH"'] : []),
     command(step.verify, shell),
     '',
   ]);
@@ -71,7 +75,7 @@ export function renderScript(steps: InstallStep[], shell: 'powershell' | 'bash',
 
 export function createInstallPlan(catalog: Catalog, request: InstallPlanRequest): InstallPlan {
   const validation = validatePlanRequest(catalog, request);
-  const resolved = resolveSelections(catalog, request.selections);
+  const resolved = resolveSelections(catalog, request.selections, request);
   let ordered = resolved.selections;
   const diagnostics = [...validation, ...resolved.diagnostics];
   try {
@@ -107,6 +111,7 @@ export function createInstallPlan(catalog: Catalog, request: InstallPlanRequest)
       toolName: tool.name,
       versionId: version.id,
       version: version.version,
+      versionLabel: version.label,
       manager: recipe.manager,
       strategy: recipe.strategy,
       reason: selection.reason === 'required' ? 'required' : 'explicit',

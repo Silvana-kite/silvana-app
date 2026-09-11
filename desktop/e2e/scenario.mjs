@@ -22,7 +22,7 @@ try {
     assert.match(page.url(), /\/scenario$/);
     assert.equal(await frontend.getAttribute('aria-checked'), 'true');
     assert.equal(await next.isDisabled(), false);
-    assert.match(await page.locator('.plan-summary-button').innerText(), /6 项工具/);
+    assert.match(await page.locator('.plan-summary-button').innerText(), /5 项工具/);
     await page.locator('.plan-summary-button').click();
     await page.getByRole('dialog', { name: '当前方案' }).waitFor();
     await page.keyboard.press('Escape');

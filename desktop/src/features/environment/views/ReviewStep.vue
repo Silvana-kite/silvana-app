@@ -20,7 +20,7 @@ const environment = useEnvironmentStore();
         <div class="install-row install-row--head"><span>顺序</span><span>工具</span><span>安装方式</span><span>来源</span></div>
         <div v-for="(item, index) in store.plan.steps" :key="item.id" class="install-row">
           <span class="step-number">{{ String(index + 1).padStart(2, '0') }}</span>
-          <span><strong>{{ item.toolName }}</strong><small>{{ item.version === 'system' ? '系统源稳定版' : item.version }}</small></span>
+          <span><strong>{{ item.toolName }}</strong><small>{{ item.versionLabel ?? (item.version === 'system' ? '系统源稳定版' : item.version) }}</small></span>
           <span><b class="manager-badge">{{ item.manager }}</b></span>
           <span>{{ item.reason === 'required' ? '自动依赖' : '用户选择' }}</span>
         </div>

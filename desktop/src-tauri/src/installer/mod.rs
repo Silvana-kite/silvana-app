@@ -257,11 +257,11 @@ fn inspect(items: &[Resolved]) -> (Vec<Step>, Vec<Blocker>) {
         steps.push(Step {
             tool_id: item.tool.id.clone(),
             name: item.tool.name.clone(),
-            version: match item.version.version.as_str() {
+            version: item.version.label.clone().unwrap_or_else(|| match item.version.version.as_str() {
                 "system" => "系统源稳定版".into(),
                 "stable" => "稳定版".into(),
                 value => value.into(),
-            },
+            }),
             installed_version: version,
             executable_path,
             target_disk: item.target_disk.clone(),

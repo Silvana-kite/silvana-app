@@ -85,7 +85,7 @@ pub fn search_paths() -> Vec<PathBuf> {
             .map(PathBuf::from),
         );
         for prefix in ["/opt/homebrew", "/usr/local"] {
-            for keg in ["postgresql@17", "python@3.13", "openjdk@21", "openjdk@25"] {
+            for keg in ["node@24", "postgresql@17", "python@3.13", "openjdk@21", "openjdk@25"] {
                 paths.push(PathBuf::from(prefix).join("opt").join(keg).join("bin"));
             }
         }

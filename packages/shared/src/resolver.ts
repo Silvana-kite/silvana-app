@@ -22,12 +22,14 @@ export function satisfies(version: string, range: string): boolean {
   return normalized ? semver.satisfies(normalized, range) : version === range;
 }
 
-function recommendedVersion(tool: Tool, range = '*'): ToolVersion | undefined {
-  return tool.versions.find((version) => version.recommended && satisfies(version.version, range))
-    ?? tool.versions.find((version) => version.channel !== 'eol' && satisfies(version.version, range));
+function recommendedVersion(tool: Tool, range = '*', target?: Pick<InstallPlanRequest, 'platform' | 'architecture'>): ToolVersion | undefined {
+  const versions = tool.versions.filter(version => !target || !tool.recipes.length || tool.recipes.some(recipe => recipe.approved
+    && recipe.versionId === version.id && recipe.platform === target.platform && (recipe.architecture === 'any' || recipe.architecture === target.architecture)));
+  return versions.find((version) => version.recommended && satisfies(version.version, range))
+    ?? versions.find((version) => version.channel !== 'eol' && satisfies(version.version, range));
 }
 
-export function resolveSelections(catalog: Catalog, requested: Selection[]) {
+export function resolveSelections(catalog: Catalog, requested: Selection[], target?: Pick<InstallPlanRequest, 'platform' | 'architecture'>) {
   const selected = new Map<string, Selection>();
   const diagnostics: Diagnostic[] = [];
 
@@ -45,7 +47,7 @@ export function resolveSelections(catalog: Catalog, requested: Selection[]) {
 
       if (version?.managedByToolId && !selected.has(version.managedByToolId)) {
         const manager = catalog.tools.find((tool) => tool.id === version.managedByToolId);
-        const managerVersion = manager && recommendedVersion(manager);
+        const managerVersion = manager && recommendedVersion(manager, '*', target);
         if (manager && managerVersion) {
           selected.set(manager.id, { toolId: manager.id, versionId: managerVersion.id, reason: 'required' });
           changed = true;
@@ -71,9 +73,9 @@ export function resolveSelections(catalog: Catalog, requested: Selection[]) {
         (candidate) => candidate.sourceToolId === selection.toolId && candidate.kind === 'requires',
       )) {
         if (selected.has(rule.targetToolId)) continue;
-        const target = catalog.tools.find((tool) => tool.id === rule.targetToolId);
-        const targetVersion = target && recommendedVersion(target, rule.targetRange);
-        if (!target || !targetVersion) {
+        const dependency = catalog.tools.find((tool) => tool.id === rule.targetToolId);
+        const targetVersion = dependency && recommendedVersion(dependency, rule.targetRange, target);
+        if (!dependency || !targetVersion) {
           diagnostics.push({
             code: 'DEPENDENCY_UNAVAILABLE',
             severity: 'error',
@@ -82,7 +84,7 @@ export function resolveSelections(catalog: Catalog, requested: Selection[]) {
           });
           continue;
         }
-        selected.set(target.id, { toolId: target.id, versionId: targetVersion.id, reason: 'required' });
+        selected.set(dependency.id, { toolId: dependency.id, versionId: targetVersion.id, reason: 'required' });
         changed = true;
       }
     }

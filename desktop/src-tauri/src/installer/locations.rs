@@ -171,6 +171,12 @@ fn default_directory(item: &Resolved) -> Result<PathBuf, String> {
             .ok_or_else(|| format!("无法定位 {name}，不能确认默认安装磁盘。"))
     };
     match item.tool.id.as_str() {
+        "node" if item.recipe.as_ref().is_some_and(|recipe| recipe.manager == "winget") => {
+            Ok(variable("ProgramFiles")?.join("nodejs"))
+        }
+        "npm" if item.version.id == "npm-bundled" => {
+            Ok(variable("ProgramFiles")?.join("nodejs"))
+        }
         "node" | "npm" | "pnpm" => {
             if item.tool.id == "pnpm" && process::locate("volta").is_none() {
                 if let Ok(prefix) = process::capture(&super::catalog::Process {
@@ -326,7 +332,6 @@ mod tests {
         let mut request = request(&["node"]);
         request.installation_targets = [
             ("node".into(), "D:\\".into()),
-            ("volta".into(), "C:\\".into()),
         ]
         .into();
         let resolved = super::super::catalog::resolve(&request).unwrap();
@@ -343,8 +348,8 @@ mod tests {
             .installation_targets
             .insert("npm".into(), "E:\\".into());
         assert!(super::super::catalog::resolve(&request).is_err());
-        request.installation_targets.remove("npm");
-        request.installation_targets.remove("volta");
+        request.installation_targets.insert("npm".into(), "D:\\".into());
+        request.installation_targets.remove("node");
         assert!(super::super::catalog::resolve(&request).is_err());
         request
             .installation_targets

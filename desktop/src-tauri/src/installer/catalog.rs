@@ -43,6 +43,7 @@ pub struct Tool {
 pub struct Version {
     pub id: String,
     pub version: String,
+    pub label: Option<String>,
     pub accepted_range: String,
     #[serde(default)]
     pub recommended: bool,
@@ -223,10 +224,11 @@ fn visit(
     let version = if let Some(version_id) = selected.get(id) {
         tool.versions.iter().find(|v| &v.id == version_id)
     } else {
-        tool.versions
-            .iter()
-            .find(|v| v.recommended)
-            .or(tool.versions.first())
+        let available = |v: &&Version| tool.recipes.iter().any(|r| r.approved
+            && r.version_id == v.id && r.platform == request.platform
+            && (r.architecture == "any" || r.architecture == request.architecture));
+        tool.versions.iter().filter(available).find(|v| v.recommended)
+            .or_else(|| tool.versions.iter().find(available))
     }
     .ok_or("缺少工具版本")?
     .clone();
@@ -348,8 +350,35 @@ mod tests {
         let items = resolve(&request()).unwrap();
         assert_eq!(
             items.iter().map(|r| r.tool.id.as_str()).collect::<Vec<_>>(),
-            vec!["volta", "node", "npm", "pnpm"]
+            vec!["node", "npm", "pnpm"]
         );
+    }
+    #[test]
+    fn standalone_node_uses_the_target_package_manager() {
+        for (platform, manager, version) in [
+            ("windows", "winget", "node-24-system"),
+            ("macos", "brew", "node-24-system"),
+            ("linux", "apt", "node-system"),
+        ] {
+            let mut r = request();
+            r.platform = platform.into();
+            let items = resolve(&r).unwrap();
+            assert!(!items.iter().any(|item| item.tool.id == "volta"));
+            let node = items.iter().find(|item| item.tool.id == "node").unwrap();
+            assert_eq!(node.version.id, version);
+            assert_eq!(node.recipe.as_ref().unwrap().manager, manager);
+            let command = super::super::process::install(node).unwrap();
+            assert!(!command.args.iter().any(|arg| arg.contains("volta")));
+            if platform == "linux" { assert!(command.args.contains(&"npm".into())); }
+        }
+    }
+    #[test]
+    fn explicitly_managed_node_keeps_its_manager_dependency() {
+        let mut r = request();
+        r.selections.push(Selection { tool_id: "node".into(), version_id: "node-24.20.0".into(), reason: None });
+        let items = resolve(&r).unwrap();
+        assert_eq!(items[0].tool.id, "volta");
+        assert_eq!(items[1].recipe.as_ref().unwrap().manager, "volta");
     }
     #[test]
     fn rejects_a_mismatched_bundled_npm() {
